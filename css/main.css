@@ -41,3 +41,8 @@ ul.posts {
 ul.posts li {
     list-style: none;
 }
+
+.connect-icon {
+    width: 40px;
+    height: 40px;
+}
