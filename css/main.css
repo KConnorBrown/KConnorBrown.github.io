@@ -26,7 +26,7 @@ h1 {
     font-family: 'Open Sans', sans-serif;
 /*     font-family:'Helvetica', 'Arial', 'Sans-Serif'; */
 }
-p {
+p:not(.project-blurb) {
     text-indent: 50px;
     font-family: 'Open Sans', sans-serif;
     font-size: 1.25em;
@@ -52,13 +52,13 @@ ul.posts li {
     height: 40px;
 }
 
-project {
+.project {
     font-size: 1.75em;
     font-family: 'Open Sans', sans-serif;
 /*     font-family:'Helvetica', 'Arial', 'Sans-Serif'; */
 }
 
-project-blurb {
+.project-blurb {
     font-family: 'Open Sans', sans-serif;
     font-size: 1.0em;
     line-height: 1.5em;
