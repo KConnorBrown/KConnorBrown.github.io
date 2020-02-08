@@ -16,9 +16,11 @@ a {
     text-decoration: none;
     color: #999;
 }
-a:hover {
+a:hover not(.icon) {
     text-decoration: underline;
 }
+
+
 h1 {
     font-size: 2.75em;
     font-family: 'Open Sans', sans-serif;
@@ -62,3 +64,5 @@ project-blurb {
     line-height: 1.5em;
     color: #333;
 }
+
+
