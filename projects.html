@@ -3,13 +3,22 @@
 <head>
   <link href="css/index.css" rel="stylesheet">
 
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.1.9/lib/p5.js"></script>
-  <script src="https://code.jquery.com/jquery-1.9.1.min.js"></script>
-  <script src="sketch.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.1.9/lib/p5.js">
+</script>
+  <script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha384-xBuQ/xzmlsLoJpyjoggmTEz8OWUFM0/RC5BsqQBDX2v5cMvDHcMakNTNrHIW2I5f" crossorigin="anonymous"></script>
   <script src="jquery.keyframes.js"></script>
+  <script src="sketch.js"></script>
   <script>
     $(window).on("load", function() {
       let bottomColor = $('#hiddenColorDiv').css("color");
+      $('.social-icon').css("visibility", "visible");
+      $('.line-1').css("visibility", "visible");
+      $('#socials').css("background-color", bottomColor);
+      $('#home').hover(function() {
+        $('#home').css("background-color", bottomColor);
+      }, function() {
+        $('#home').css("background-color", "transparent");
+      });
       $('#about').hover(function() {
         $('#about').css("background-color", bottomColor);
       }, function() {
@@ -25,17 +34,14 @@
       }, function() {
         $('#resume').css("background-color", "transparent");
       });
-      $('.social-icon').css("visibility", "visible");
-      $('.line-1').css("visibility", "visible");
-      $('#socials').css("background-color", bottomColor);
-
+      $('.line-1').css('width', '206px');
       $.keyframe.define([{
         name: 'typewriter',
         from: {
           'width': '0px'
         },
         to: {
-          'width': '9.25em'
+          'width': '205px'
         }
       }, {
         name: 'blinkTextCursor',
@@ -48,13 +54,14 @@
       }]);
       $('.line-1').playKeyframe([{
         name: 'typewriter',
-        duration: '2.5s',
-        timingFunction: 'steps(17)',
+        duration: '1.5s',
+        timingFunction: 'steps(8)',
         delay: '1s',
         iterationCount: '1',
         direction: 'normal',
         fillMode: 'both',
-      }, 'blinkTextCursor 1000ms steps(17) infinite normal']);
+      }, 'blinkTextCursor 1000ms steps(17) infinite normal']
+      );
     });
   </script>
 </head>
@@ -62,16 +69,14 @@
 <body>
   <main>
     <div class='main-container'>
-      <p class="line-1 anim-typewriter">Hello, I'm Connor</p>
-      <!-- <div class="page-wrapper">
-      </div> -->
+      <p class="line-1 anim-typewriter" styles='width:205px'>Projects</p>
+      <div class="page-wrapper">
+      </div>
       <div id="myMenu" class="vertical-menu">
+        <a id='home' href="index.html">Home</a>
         <a id='about' href="about.html">About Me</a>
-        <a id='projects' href="projects.html">Projects</a>
         <a id='resume' href="https://kconnorbrown.github.io/assets/resume.pdf" target="_blank" rel="noopener noreferrer">Resume</a>
       </div>
-
-    </div>
     <div id='socials'>
       <a href="mailto:downtown.c.brown1999@gmail.com" class="social">
         <img src="assets/mail_icon.png" alt="Email" class="social-icon">
