@@ -1,8 +1,17 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "config/wsgi.py": {
-      "maxDuration": 60
+  "services": {
+    "web": {
+      "root": ".",
+      "entrypoint": "config/wsgi.py"
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "web"
+      }
+    }
+  ]
 }

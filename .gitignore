@@ -8,3 +8,4 @@ media/
 .env
 .env.*
 .vercel
+.env*
