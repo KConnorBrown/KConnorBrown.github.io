@@ -1,0 +1,21 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <h1>{{ title }}</h1>
+    <p class="section-intro">{{ intro }}</p>
+
+    <div class="stack-list">
+      {% for post in posts %}
+        <article class="stack-item">
+          <p class="meta">{{ post.get_post_type_display }}</p>
+          <h2><a href="{% url 'post_detail' post.slug %}">{{ post.title }}</a></h2>
+        </article>
+      {% empty %}
+        <div class="placeholder">
+          <p>No published posts yet.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

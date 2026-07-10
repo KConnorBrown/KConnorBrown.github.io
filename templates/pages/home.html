@@ -1,0 +1,31 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="hero">
+    <p class="hero-kicker">Personal website</p>
+    <h1>{{ title }}</h1>
+    <p class="hero-intro">{{ intro }}</p>
+  </section>
+  <section class="grid">
+    <a class="card" href="/development/">
+      <h2>Development</h2>
+      <p>Projects, experiments, and the PostgreSQL SQL playground.</p>
+    </a>
+    <a class="card" href="/visual-art/">
+      <h2>Visual Art</h2>
+      <p>Chronological archive with an interactive viewer.</p>
+    </a>
+    <a class="card" href="/writing/">
+      <h2>Writing</h2>
+      <p>Essays, notes, and long-form drafts.</p>
+    </a>
+    <a class="card" href="/interior-design/">
+      <h2>Interior Design</h2>
+      <p>Spatial studies and journaled work.</p>
+    </a>
+    <a class="card" href="/photo-journal/">
+      <h2>Photo Journal</h2>
+      <p>Grid-based photo stream outside social platforms.</p>
+    </a>
+  </section>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }} | Connor Brown</title>
+    <link rel="stylesheet" href="{% static 'css/site.css' %}">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-title" href="/">Connor Brown</a>
+      <nav class="site-nav">
+        <a href="/development/">Development</a>
+        <a href="/playground/sql/">SQL Playground</a>
+        <a href="/visual-art/">Visual Art</a>
+        <a href="/writing/">Writing</a>
+        <a href="/interior-design/">Interior Design</a>
+        <a href="/photo-journal/">Photo Journal</a>
+      </nav>
+    </header>
+    <main class="site-main">
+      {% block content %}{% endblock %}
+    </main>
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

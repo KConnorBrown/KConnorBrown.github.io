@@ -1,0 +1,121 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section playground">
+    <h1>{{ title }}</h1>
+    <p class="section-intro">
+      Read-only sandbox matching the
+      <a href="https://www.postgresql.org/docs/current/tutorial-start.html" target="_blank" rel="noopener">
+        official PostgreSQL tutorial
+      </a>.
+      Write queries locally in <code>psql</code> as you follow along.
+    </p>
+
+    <div class="playground-layout">
+      <aside class="playground-sidebar">
+        <h2>Tutorial examples</h2>
+        <ul class="example-list">
+          {% for example in examples %}
+            <li>
+              <button
+                type="button"
+                class="example-button"
+                data-query="{{ example.query|escape }}"
+              >
+                {{ example.title }}
+              </button>
+              <a href="{{ example.url }}" target="_blank" rel="noopener">docs</a>
+            </li>
+          {% endfor %}
+        </ul>
+
+        <h2>Schema</h2>
+        <ul class="schema-list">
+          {% for table in schema %}
+            <li>
+              <strong>{{ table.name }}</strong>
+              <span>{{ table.columns|join:", " }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </aside>
+
+      <div class="playground-main">
+        <label for="sql-editor">SQL query</label>
+        <textarea id="sql-editor" rows="8" spellcheck="false">SELECT * FROM weather</textarea>
+        <div class="playground-actions">
+          <button type="button" id="run-query">Run query</button>
+          <span id="query-status" class="query-status"></span>
+        </div>
+        <div id="results" class="query-results" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    const editor = document.getElementById("sql-editor");
+    const status = document.getElementById("query-status");
+    const results = document.getElementById("results");
+    const csrfToken = "{{ csrf_token }}";
+
+    document.querySelectorAll(".example-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        editor.value = button.dataset.query;
+      });
+    });
+
+    document.getElementById("run-query").addEventListener("click", async () => {
+      status.textContent = "Running...";
+      results.innerHTML = "";
+
+      try {
+        const response = await fetch(window.location.pathname, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken,
+          },
+          body: JSON.stringify({ query: editor.value }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          status.textContent = data.error || "Query failed.";
+          return;
+        }
+
+        status.textContent = `${data.rows.length} row(s) in ${data.elapsed_ms} ms`;
+        results.innerHTML = renderTable(data.columns, data.rows);
+      } catch (error) {
+        status.textContent = "Request failed.";
+      }
+    });
+
+    function renderTable(columns, rows) {
+      if (!columns.length) {
+        return "<p>No columns returned.</p>";
+      }
+
+      const head = columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("");
+      const body = rows
+        .map((row) => {
+          const cells = row
+            .map((value) => `<td>${escapeHtml(value ?? "NULL")}</td>`)
+            .join("");
+          return `<tr>${cells}</tr>`;
+        })
+        .join("");
+
+      return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+  </script>
+{% endblock %}

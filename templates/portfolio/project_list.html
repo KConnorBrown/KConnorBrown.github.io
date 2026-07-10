@@ -1,0 +1,24 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <h1>{{ title }}</h1>
+    <p class="section-intro">{{ intro }}</p>
+
+    <div class="grid">
+      {% for project in projects %}
+        <a class="card" href="{% url 'project_detail' project.slug %}">
+          <h2>{{ project.title }}</h2>
+          <p>{{ project.summary }}</p>
+          {% if project.tech_stack %}
+            <p class="meta">{{ project.tech_stack }}</p>
+          {% endif %}
+        </a>
+      {% empty %}
+        <div class="placeholder">
+          <p>Projects will appear here as they are added.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

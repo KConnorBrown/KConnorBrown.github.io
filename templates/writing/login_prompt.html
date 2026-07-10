@@ -1,0 +1,12 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <h1>{{ title }}</h1>
+    <p class="section-intro">{{ intro }}</p>
+    <div class="placeholder">
+      <p>This section is password protected.</p>
+      <a class="button" href="{% url 'writing_login' %}">Log in to read</a>
+    </div>
+  </section>
+{% endblock %}

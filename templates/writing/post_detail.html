@@ -1,0 +1,10 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <p class="hero-kicker"><a href="{% url 'writing_home' %}">Writing</a></p>
+    <h1>{{ post.title }}</h1>
+    <p class="meta">{{ post.get_post_type_display }}</p>
+    <div class="prose">{{ post.rendered_body|safe }}</div>
+  </section>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <h1>{{ title }}</h1>
+    <p class="section-intro">{{ intro }}</p>
+
+    <div class="photo-grid">
+      {% for entry in entries %}
+        <figure class="photo-card">
+          {% if entry.photo %}
+            <img src="{{ entry.photo.url }}" alt="{{ entry.title }}">
+          {% endif %}
+          <figcaption>
+            <h2>{{ entry.title }}</h2>
+            <p>{{ entry.caption }}</p>
+            <p class="meta">{{ entry.get_tag_display }} · {{ entry.entry_date }}</p>
+          </figcaption>
+        </figure>
+      {% empty %}
+        <div class="placeholder">
+          <p>Photo journal entries will appear here.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

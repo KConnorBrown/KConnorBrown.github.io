@@ -1,0 +1,26 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <p class="hero-kicker"><a href="{% url 'project_list' %}">Development</a></p>
+    <h1>{{ project.title }}</h1>
+    <p class="section-intro">{{ project.summary }}</p>
+
+    {% if project.tech_stack %}
+      <p class="meta">{{ project.tech_stack }}</p>
+    {% endif %}
+
+  {% if project.case_study %}
+    <div class="prose">{{ project.case_study|linebreaks }}</div>
+  {% endif %}
+
+    <div class="project-links">
+      {% if project.live_url %}
+        <a href="{{ project.live_url }}" target="_blank" rel="noopener">Live demo</a>
+      {% endif %}
+      {% if project.repo_url %}
+        <a href="{{ project.repo_url }}" target="_blank" rel="noopener">Repository</a>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

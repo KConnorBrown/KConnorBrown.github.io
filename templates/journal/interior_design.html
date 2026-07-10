@@ -1,0 +1,36 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <h1>{{ title }}</h1>
+    <p class="section-intro">{{ intro }}</p>
+
+    <div class="stack-list">
+      {% for project in projects %}
+        <article class="stack-item">
+          <h2><a href="{% url 'design_project_detail' project.slug %}">{{ project.title }}</a></h2>
+          <p>{{ project.summary }}</p>
+        </article>
+      {% endfor %}
+    </div>
+
+    <h2>Journal highlights</h2>
+    <div class="photo-grid">
+      {% for entry in entries %}
+        <figure class="photo-card">
+          {% if entry.photo %}
+            <img src="{{ entry.photo.url }}" alt="{{ entry.title }}">
+          {% endif %}
+          <figcaption>
+            <h3>{{ entry.title }}</h3>
+            <p class="meta">{{ entry.entry_date }}</p>
+          </figcaption>
+        </figure>
+      {% empty %}
+        <div class="placeholder">
+          <p>Interior design journal entries will appear here.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

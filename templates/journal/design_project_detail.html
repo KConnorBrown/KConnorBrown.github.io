@@ -1,0 +1,13 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section">
+    <p class="hero-kicker"><a href="{% url 'interior_design' %}">Interior Design</a></p>
+    <h1>{{ project.title }}</h1>
+    <p class="section-intro">{{ project.summary }}</p>
+    {% if project.featured_image %}
+      <img class="featured-image" src="{{ project.featured_image.url }}" alt="{{ project.title }}">
+    {% endif %}
+    <div class="prose">{{ project.body|linebreaks }}</div>
+  </section>
+{% endblock %}
