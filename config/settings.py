@@ -54,7 +54,7 @@ INSTALLED_APPS = [
     "playground",
     "portfolio",
     "writing",
-    "journal",
+    "journal.apps.JournalConfig",
 ]
 
 MIDDLEWARE = [
@@ -169,6 +169,9 @@ if os.getenv("AWS_STORAGE_BUCKET_NAME"):
     AWS_DEFAULT_ACL = None
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_FILE_OVERWRITE = True
+    AWS_S3_OBJECT_PARAMETERS = {
+        "CacheControl": "public, max-age=31536000, immutable",
+    }
     AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN", "").removeprefix("https://").removeprefix("http://").rstrip("/")
     if AWS_S3_CUSTOM_DOMAIN:
         MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"

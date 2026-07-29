@@ -57,7 +57,7 @@
       </span>
       <span class="dot-disc">
         {% if entry.photo %}
-          <img src="{{ entry.photo.url }}" alt="{{ entry.title }}" loading="lazy">
+          <img src="{{ entry.grid_image_url }}" alt="{{ entry.title }}" loading="lazy" decoding="async">
         {% endif %}
       </span>
     </button>

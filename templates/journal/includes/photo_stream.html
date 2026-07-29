@@ -27,7 +27,7 @@
           {% endfor %}
         </span>
         {% if entry.photo %}
-          <img src="{{ entry.photo.url }}" alt="{{ entry.title }}" loading="lazy">
+          <img src="{{ entry.grid_image_url }}" alt="{{ entry.title }}" loading="lazy" decoding="async">
         {% endif %}
         {% if not entry.is_published %}
           <span class="photo-stream-badge">Hidden</span>

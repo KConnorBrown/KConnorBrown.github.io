@@ -16,6 +16,11 @@ class JournalEntry(models.Model):
     title = models.CharField(max_length=200)
     caption = models.TextField(blank=True)
     photo = models.ImageField(upload_to="journal/")
+    thumbnail = models.ImageField(
+        upload_to="journal/thumbs/",
+        blank=True,
+        help_text="Small grid preview; auto-generated from photo when missing.",
+    )
     entry_date = models.DateField()
     tags = models.ManyToManyField(Tag, related_name="entries", blank=True)
     instagram_shortcode = models.CharField(max_length=32, blank=True, null=True, unique=True)
@@ -32,12 +37,23 @@ class JournalEntry(models.Model):
     def __str__(self):
         return self.title
 
+    @property
+    def grid_image_url(self) -> str:
+        if self.thumbnail:
+            return self.thumbnail.url
+        if self.photo:
+            return self.photo.url
+        return ""
+
     def delete(self, using=None, keep_parents=False):
         storage = self.photo.storage
-        path = self.photo.name
+        photo_path = self.photo.name if self.photo else ""
+        thumb_path = self.thumbnail.name if self.thumbnail else ""
         super().delete(using=using, keep_parents=keep_parents)
-        if path:
-            storage.delete(path)
+        if photo_path:
+            storage.delete(photo_path)
+        if thumb_path:
+            storage.delete(thumb_path)
 
 
 class PhotoCollection(models.Model):
