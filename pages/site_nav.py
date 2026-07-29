@@ -1,5 +1,12 @@
 SITE_SECTIONS = [
     {
+        "key": "about",
+        "label": "About Me",
+        "label_lines": ["About", "Me"],
+        "url": "/about/",
+        "intro": "A bit about Connor.",
+    },
+    {
         "key": "development",
         "label": "Software Development",
         "label_lines": ["Software", "Development"],
@@ -12,13 +19,6 @@ SITE_SECTIONS = [
         "label_lines": ["Photography"],
         "url": "/photography/",
         "intro": "Photos tagged photography.",
-    },
-    {
-        "key": "about",
-        "label": "About Me",
-        "label_lines": ["About", "Me"],
-        "url": "/about/",
-        "intro": "A bit about Connor.",
     },
     {
         "key": "interior-design",
