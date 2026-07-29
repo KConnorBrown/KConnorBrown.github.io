@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Connor Brown">
+  <!-- Home purple, social yellow, nav blue  slight gaps between dots -->
+  <circle cx="16" cy="9.5" r="5.75" fill="#7e1f5b"/>
+  <circle cx="9.75" cy="22.25" r="5.75" fill="#cfff04"/>
+  <circle cx="22.25" cy="22.25" r="5.75" fill="#0047ab"/>
+</svg>
