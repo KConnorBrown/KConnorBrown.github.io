@@ -398,5 +398,69 @@
         y: window.innerHeight * 0.5,
       });
     });
+
+    // Mobile: park tag filters in the map grid after Photo Journal instead of
+    // the left rail (which overlaps the larger touch-sized dots).
+    const filterRail = document.querySelector(".corner-filter-rail");
+
+    function touchMode() {
+      return Boolean(
+        document.body.classList.contains("map-touch") ||
+          (window.MapMotion && window.MapMotion.isTouch())
+      );
+    }
+
+    function lastNavItem() {
+      let last = null;
+      Array.from(map.children).forEach((child) => {
+        if (
+          child.classList.contains("dot-nav") ||
+          child.classList.contains("dot-page")
+        ) {
+          last = child;
+        }
+      });
+      return last;
+    }
+
+    function placeFilterDots() {
+      if (!filterRail) return;
+      const filters = Array.from(
+        document.querySelectorAll(".corner-dot-filter")
+      );
+      if (!filters.length) return;
+
+      if (touchMode()) {
+        let ref = lastNavItem();
+        filters.forEach((dot) => {
+          dot.classList.add("photo-stream-item", "dot-item", "dot-filter");
+          if (ref) {
+            ref.after(dot);
+            ref = dot;
+          } else {
+            const firstPhoto = map.querySelector(".dot-photo");
+            if (firstPhoto) map.insertBefore(dot, firstPhoto);
+            else map.appendChild(dot);
+            ref = dot;
+          }
+        });
+        filterRail.classList.add("is-relocated");
+      } else {
+        filters.forEach((dot) => {
+          dot.classList.remove("photo-stream-item", "dot-item", "dot-filter");
+          if (dot.parentElement !== filterRail) {
+            filterRail.appendChild(dot);
+          }
+        });
+        filterRail.classList.remove("is-relocated");
+      }
+      notifyMap();
+    }
+
+    placeFilterDots();
+    window.addEventListener("resize", () => {
+      window.setTimeout(placeFilterDots, 140);
+    });
+    document.addEventListener("home-intro:done", placeFilterDots);
   })();
 </script>

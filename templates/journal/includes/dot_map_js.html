@@ -25,14 +25,20 @@
       discs = items.map((item) => item.querySelector(".dot-disc"));
       images = discs.map((disc) => (disc ? disc.querySelector("img") : null));
       labels = discs.map((disc) => (disc ? disc.querySelector(".dot-label") : null));
-      const cols = Math.max(1, parseInt(map.dataset.navCount || "7", 10));
+      const cols = Math.max(
+        1,
+        parseInt(map.style.getPropertyValue("--dot-cols") || map.dataset.navCount || "7", 10)
+      );
       gridMeta = items.map((item, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
         return {
           col,
           row,
-          isNav: item.classList.contains("dot-nav") || item.classList.contains("dot-page"),
+          isNav:
+            item.classList.contains("dot-nav") ||
+            item.classList.contains("dot-page") ||
+            item.classList.contains("dot-filter"),
         };
       });
     }
@@ -46,6 +52,8 @@
     const SIGMA_CELLS = 2.0;
     const MIN_SCALE = 0.32;
     const MAX_CELL = 150;
+    // Touch: match ~corner disc face (44px at 72% of cell ≈ 61px cell).
+    const TOUCH_TARGET_CELL = 68;
 
     let cellSize = 0;
     let centers = [];
@@ -64,12 +72,24 @@
         window.innerWidth;
       if (!available) return;
       const navCount = Math.max(1, parseInt(map.dataset.navCount || "8", 10));
-      const cols = navCount;
       const touch = isTouchMode();
-      const hasFilterRail = Boolean(document.querySelector(".corner-filter-rail"));
-      const leftGutter = touch ? (hasFilterRail ? 112 : 92) : 48;
-      const rightGutter = touch ? 92 : 48;
+      // Touch reclaim width; journal filters live in the grid on mobile, not the rail.
+      const leftGutter = touch ? 52 : 48;
+      const rightGutter = touch ? 52 : 48;
       const usable = Math.max(available - leftGutter - rightGutter, 160);
+
+      let cols = navCount;
+      if (touch) {
+        // Prefer 4 cols so a 7-item nav wraps to two rows at readable size.
+        if (usable / 4 >= TOUCH_TARGET_CELL * 0.85) {
+          cols = 4;
+        } else if (usable / 3 >= TOUCH_TARGET_CELL * 0.75) {
+          cols = 3;
+        } else {
+          cols = Math.max(2, Math.floor(usable / Math.max(TOUCH_TARGET_CELL * 0.7, 48)));
+        }
+      }
+
       cellSize = Math.min(usable / cols, MAX_CELL);
       map.style.width = `${Math.round(cols * cellSize)}px`;
       map.style.maxWidth = `${Math.round(cols * cellSize)}px`;

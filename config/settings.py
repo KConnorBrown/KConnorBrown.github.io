@@ -19,6 +19,9 @@ if DEBUG:
     _default_hosts.append(".trycloudflare.com")
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", ",".join(_default_hosts)).split(",")
+# Local phone / tunnel testing: accept any Host header while DEBUG is on.
+if DEBUG and not os.getenv("DJANGO_ALLOWED_HOSTS"):
+    ALLOWED_HOSTS = ["*"]
 
 _default_csrf_origins = []
 if os.getenv("VERCEL"):

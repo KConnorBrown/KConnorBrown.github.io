@@ -563,6 +563,43 @@ body.map-touch .corner-filter-rail {
   width: 58px;
 }
 
+body.map-touch .corner-filter-rail.is-relocated {
+  display: none;
+}
+
+/* Filters seated in the map grid (mobile) */
+.dot-map .corner-dot-filter.dot-filter {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: auto;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+
+.dot-map .corner-dot-filter.dot-filter .corner-disc {
+  width: 72%;
+  height: 72%;
+  position: relative;
+}
+
+.dot-map .corner-dot-filter.dot-filter .corner-label {
+  opacity: 1;
+  font-size: calc(var(--dot-cell, 120px) * 0.078);
+  max-width: calc(var(--dot-cell, 120px) * 0.62);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.dot-map .corner-dot-filter.dot-filter .corner-label.is-long {
+  font-size: calc(var(--dot-cell, 120px) * 0.062);
+}
+
 body.map-touch .corner-dot-home {
   top: 14px;
   left: 14px;
@@ -588,25 +625,44 @@ body.map-touch .corner-dot-filter .corner-disc {
   height: 50px;
 }
 
+body.map-touch .dot-disc {
+  width: 72%;
+  height: 72%;
+}
+
+body.map-touch .dot-nav .dot-label,
+body.map-touch .dot-page .dot-label {
+  font-size: calc(var(--dot-cell, 120px) * 0.1);
+  max-width: calc(var(--dot-cell, 120px) * 0.62);
+  line-height: 1.15;
+}
+
+body.map-touch .dot-nav .dot-label.is-long,
+body.map-touch .dot-page .dot-label.is-long {
+  font-size: calc(var(--dot-cell, 120px) * 0.078);
+  max-width: calc(var(--dot-cell, 120px) * 0.64);
+}
+
 .map-tilt-enable {
   position: fixed;
   left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: 60;
   border: 0;
   border-radius: 999px;
-  padding: 0.55rem 1rem;
+  padding: 0.6rem 1.1rem;
   font-family: var(--font-display);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: #fff;
-  background: rgba(20, 20, 24, 0.72);
+  background: rgba(20, 20, 24, 0.82);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
   pointer-events: auto;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
 }
 
 .map-tilt-enable[hidden] {

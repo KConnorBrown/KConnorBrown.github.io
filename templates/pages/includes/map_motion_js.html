@@ -3,6 +3,11 @@
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const touchQuery = window.matchMedia("(hover: none) and (pointer: coarse)");
     const listeners = new Set();
+    const secureContext = window.isSecureContext;
+    const hasOrientation = typeof window.DeviceOrientationEvent !== "undefined";
+    const needsPermission =
+      hasOrientation && typeof DeviceOrientationEvent.requestPermission === "function";
+    const TILT_PREF_KEY = "map-tilt-enabled";
 
     const state = {
       reduceMotion,
@@ -10,7 +15,9 @@
       gravityX: 0,
       gravityY: 0,
       tiltEnabled: false,
-      tiltAvailable: typeof window.DeviceOrientationEvent !== "undefined",
+      tiltAvailable: hasOrientation,
+      // iPhone only grants orientation over HTTPS (tunnel / production), not LAN http://
+      tiltNeedsHttps: Boolean(needsPermission && !secureContext),
     };
 
     let targetX = 0;
@@ -19,13 +26,46 @@
     let listening = false;
     let tiltBtn = null;
 
+    function readTiltPref() {
+      try {
+        return window.localStorage.getItem(TILT_PREF_KEY) === "1";
+      } catch (_err) {
+        return false;
+      }
+    }
+
+    function writeTiltPref(on) {
+      try {
+        if (on) window.localStorage.setItem(TILT_PREF_KEY, "1");
+        else window.localStorage.removeItem(TILT_PREF_KEY);
+      } catch (_err) {
+        /* ignore quota / private mode */
+      }
+    }
+
+    function syncTiltButton() {
+      if (!tiltBtn) return;
+      const show =
+        state.isTouch &&
+        !reduceMotion &&
+        !state.tiltEnabled &&
+        (state.tiltAvailable || state.tiltNeedsHttps);
+      tiltBtn.hidden = !show;
+      if (state.tiltNeedsHttps) {
+        tiltBtn.textContent = "Tilt needs HTTPS";
+        tiltBtn.title =
+          "iPhone only allows tilt on a secure URL. Use production or the Cloudflare tunnel https:// link.";
+      } else {
+        tiltBtn.textContent = "Enable tilt";
+        tiltBtn.title = "Allow device motion so the dots respond to phone tilt";
+      }
+    }
+
     function syncTouchClass() {
       state.isTouch = touchQuery.matches;
       document.body.classList.toggle("map-touch", state.isTouch);
       document.body.classList.toggle("map-reduced-motion", reduceMotion);
-      if (tiltBtn) {
-        tiltBtn.hidden = !(state.isTouch && !reduceMotion && state.tiltAvailable && !state.tiltEnabled);
-      }
+      syncTiltButton();
     }
 
     function notify() {
@@ -60,7 +100,6 @@
     }
 
     function onOrientation(event) {
-      // beta: front-back (-180..180), gamma: left-right (-90..90)
       const beta = typeof event.beta === "number" ? event.beta : 0;
       const gamma = typeof event.gamma === "number" ? event.gamma : 0;
       const maxShift = 14;
@@ -79,23 +118,47 @@
       notify();
     }
 
-    async function enableTilt() {
-      if (reduceMotion || !state.tiltAvailable) return false;
-      try {
-        if (typeof DeviceOrientationEvent.requestPermission === "function") {
-          const result = await DeviceOrientationEvent.requestPermission();
-          if (result !== "granted") return false;
-        }
-        startTilt();
-        try {
-          window.sessionStorage.setItem("map-tilt-enabled", "1");
-        } catch (_err) {
-          /* ignore */
-        }
-        return true;
-      } catch (_err) {
+    async function requestOrientationAccess() {
+      if (needsPermission) {
+        const result = await DeviceOrientationEvent.requestPermission();
+        return result === "granted";
+      }
+      return true;
+    }
+
+    async function enableTilt({ fromGesture = true } = {}) {
+      if (reduceMotion) return false;
+      if (state.tiltNeedsHttps) {
+        if (tiltBtn) tiltBtn.textContent = "Open HTTPS tunnel";
         return false;
       }
+      if (!state.tiltAvailable) return false;
+      try {
+        const allowed = await requestOrientationAccess();
+        if (!allowed) return false;
+        startTilt();
+        writeTiltPref(true);
+        return true;
+      } catch (_err) {
+        // Auto-resume without a gesture can throw on some iOS versions.
+        if (!fromGesture) return false;
+        return false;
+      }
+    }
+
+    async function resumeTiltIfPreferred() {
+      if (
+        reduceMotion ||
+        !state.isTouch ||
+        !state.tiltAvailable ||
+        state.tiltNeedsHttps ||
+        !readTiltPref()
+      ) {
+        return false;
+      }
+      // After the user has granted once for this origin, iOS usually returns
+      // "granted" again without a prompt — including on later page loads.
+      return enableTilt({ fromGesture: false });
     }
 
     function ensureTiltButton() {
@@ -108,8 +171,10 @@
       tiltBtn.setAttribute("aria-label", "Enable tilt gravity for the map dots");
       tiltBtn.hidden = true;
       tiltBtn.addEventListener("click", () => {
-        enableTilt().then((ok) => {
-          if (!ok && tiltBtn) tiltBtn.textContent = "Tilt unavailable";
+        enableTilt({ fromGesture: true }).then((ok) => {
+          if (!ok && tiltBtn && !state.tiltNeedsHttps) {
+            tiltBtn.textContent = "Tilt unavailable";
+          }
         });
       });
       document.body.appendChild(tiltBtn);
@@ -141,20 +206,15 @@
       touchQuery.addListener(syncTouchClass);
     }
 
-    if (!reduceMotion && state.tiltAvailable) {
+    if (!reduceMotion && (state.tiltAvailable || state.tiltNeedsHttps)) {
       ensureTiltButton();
-      let preferTilt = false;
-      try {
-        preferTilt = window.sessionStorage.getItem("map-tilt-enabled") === "1";
-      } catch (_err) {
-        preferTilt = false;
-      }
-      // Android / desktop-with-sensor: no permission API — start when touch.
-      if (typeof DeviceOrientationEvent.requestPermission !== "function" && state.isTouch) {
+      if (!needsPermission && state.isTouch && state.tiltAvailable && secureContext) {
         startTilt();
-      } else if (preferTilt && typeof DeviceOrientationEvent.requestPermission === "function") {
-        // Need a gesture on iOS; keep the button visible until they tap.
-        syncTouchClass();
+        writeTiltPref(true);
+      } else {
+        resumeTiltIfPreferred().then((ok) => {
+          if (!ok) syncTouchClass();
+        });
       }
     }
   })();
