@@ -7,16 +7,34 @@
     let discs = [];
     let images = [];
     let labels = [];
+    let gridMeta = [];
 
     const pageBtn = document.getElementById("page-indicator");
     const pageModal = document.getElementById("page-info-modal");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const motion = window.MapMotion || null;
+
+    function isTouchMode() {
+      return Boolean(
+        (motion && motion.isTouch()) || document.body.classList.contains("map-touch")
+      );
+    }
 
     function refreshItems() {
       items = Array.from(map.querySelectorAll(".dot-item:not(.is-filter-hidden)"));
       discs = items.map((item) => item.querySelector(".dot-disc"));
       images = discs.map((disc) => (disc ? disc.querySelector("img") : null));
       labels = discs.map((disc) => (disc ? disc.querySelector(".dot-label") : null));
+      const cols = Math.max(1, parseInt(map.dataset.navCount || "7", 10));
+      gridMeta = items.map((item, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        return {
+          col,
+          row,
+          isNav: item.classList.contains("dot-nav") || item.classList.contains("dot-page"),
+        };
+      });
     }
 
     refreshItems();
@@ -24,10 +42,6 @@
 
     // Smooth fisheye warp with no lens boundary. Space is remapped radially:
     //   R(r) = r * (1 + B * g),  g = exp(-r^2 / (2 * sigma^2))
-    // Each dot moves to its remapped position, and its scale equals the
-    // local stretch of the warped fabric in whichever direction is most
-    // compressed (min of radial and tangential stretch). Because both
-    // come from the same mapping, dots can never overlap.
     const BULGE = 1.4;
     const SIGMA_CELLS = 2.0;
     const MIN_SCALE = 0.32;
@@ -38,12 +52,10 @@
     let mouseX = null;
     let mouseY = null;
     let frameQueued = false;
+    let shimmerRaf = 0;
+    let shimmerT0 = 0;
 
-    // First row is always the site nav, so columns equal the nav count.
-    // Cap cell size and center the grid so edge dots have room to bulge.
     function layoutColumns() {
-      // Prefer the section width — on the homepage the menu wrap starts hidden
-      // and can report 0, which previously left the map with no width.
       const section = map.closest(".photo-stream-section");
       const available =
         (section && section.clientWidth) ||
@@ -53,8 +65,11 @@
       if (!available) return;
       const navCount = Math.max(1, parseInt(map.dataset.navCount || "8", 10));
       const cols = navCount;
-      // Leave a little side padding so leftmost/rightmost bulges stay on-screen.
-      const usable = Math.max(available - 48, 200);
+      const touch = isTouchMode();
+      const hasFilterRail = Boolean(document.querySelector(".corner-filter-rail"));
+      const leftGutter = touch ? (hasFilterRail ? 112 : 92) : 48;
+      const rightGutter = touch ? 92 : 48;
+      const usable = Math.max(available - leftGutter - rightGutter, 160);
       cellSize = Math.min(usable / cols, MAX_CELL);
       map.style.width = `${Math.round(cols * cellSize)}px`;
       map.style.maxWidth = `${Math.round(cols * cellSize)}px`;
@@ -64,6 +79,7 @@
       map.style.marginRight = "auto";
       map.style.setProperty("--dot-cols", String(cols));
       map.style.setProperty("--dot-cell", `${cellSize}px`);
+      refreshItems();
     }
 
     function measureCenters() {
@@ -76,20 +92,42 @@
       });
     }
 
-    function resetAll() {
-      map.classList.add("is-resting");
+    function gravityOffset() {
+      if (!motion) return { x: 0, y: 0 };
+      return motion.gravity();
+    }
+
+    function clearInlineReveal() {
       items.forEach((item, i) => {
-        const disc = discs[i];
-        if (!disc) return;
-        disc.style.transform = "";
-        item.style.zIndex = "";
         if (images[i]) images[i].style.opacity = "";
         if (labels[i]) labels[i].style.opacity = "";
       });
     }
 
+    function resetAll() {
+      map.classList.add("is-resting");
+      const g = gravityOffset();
+      const useGravity = isTouchMode() && !reduceMotion && (g.x || g.y);
+      items.forEach((item, i) => {
+        const disc = discs[i];
+        if (!disc) return;
+        if (useGravity) {
+          disc.style.transform = `translate(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px)`;
+        } else {
+          disc.style.transform = "";
+        }
+        item.style.zIndex = "";
+        if (!isTouchMode()) {
+          if (images[i]) images[i].style.opacity = "";
+          if (labels[i]) labels[i].style.opacity = "";
+        }
+      });
+      if (isTouchMode()) {
+        // Leave shimmer to own its opacity; clear only when shimmer stopped.
+      }
+    }
+
     function contentReveal(dist) {
-      // Full at the center, faded by ~1 cell away — same falloff as photos.
       return Math.min(Math.max((1 - dist / cellSize) / 0.5, 0), 1);
     }
 
@@ -103,6 +141,10 @@
 
     function applyLens() {
       frameQueued = false;
+      if (isTouchMode()) {
+        applyTouchTransforms();
+        return;
+      }
       if (mouseX === null) return;
       if (lensSuppressed()) {
         resetAll();
@@ -141,6 +183,26 @@
       }
     }
 
+    function applyTouchTransforms(waveOpacity) {
+      const g = gravityOffset();
+      for (let i = 0; i < items.length; i += 1) {
+        const disc = discs[i];
+        if (!disc) continue;
+        disc.style.transform = `translate(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px)`;
+        items[i].style.zIndex = "";
+        if (waveOpacity && !lensSuppressed()) {
+          const meta = gridMeta[i] || { col: 0, row: 0, isNav: false };
+          const wave = waveOpacity(meta.col, meta.row, meta.isNav);
+          if (images[i] && items[i].classList.contains("dot-photo")) {
+            images[i].style.opacity = wave.toFixed(3);
+          }
+          if (labels[i] && meta.isNav) {
+            labels[i].style.opacity = Math.min(1, wave + 0.12).toFixed(3);
+          }
+        }
+      }
+    }
+
     function queueFrame() {
       if (!frameQueued) {
         frameQueued = true;
@@ -148,10 +210,58 @@
       }
     }
 
+    function shimmerAllowed() {
+      return (
+        isTouchMode() &&
+        !reduceMotion &&
+        !document.hidden &&
+        !lensSuppressed()
+      );
+    }
+
+    function shimmerFrame(now) {
+      shimmerRaf = 0;
+      if (!shimmerAllowed()) {
+        if (isTouchMode()) {
+          clearInlineReveal();
+          applyTouchTransforms();
+        }
+        return;
+      }
+      if (!shimmerT0) shimmerT0 = now;
+      const t = (now - shimmerT0) / 1000;
+      applyTouchTransforms((col, row, isNav) => {
+        const phase = t * 1.35 + col * 0.55 + row * 0.38;
+        const wave = 0.5 + 0.5 * Math.sin(phase);
+        if (isNav) {
+          return 0.72 + wave * 0.22;
+        }
+        return 0.55 + wave * 0.45;
+      });
+      shimmerRaf = window.requestAnimationFrame(shimmerFrame);
+    }
+
+    function startShimmer() {
+      if (reduceMotion || shimmerRaf) return;
+      shimmerT0 = 0;
+      shimmerRaf = window.requestAnimationFrame(shimmerFrame);
+    }
+
+    function stopShimmer() {
+      if (shimmerRaf) {
+        window.cancelAnimationFrame(shimmerRaf);
+        shimmerRaf = 0;
+      }
+      shimmerT0 = 0;
+      if (isTouchMode()) clearInlineReveal();
+    }
+
     function openPageInfo() {
       if (!pageModal) return;
       pageModal.hidden = false;
       document.body.classList.add("modal-open");
+      mouseX = null;
+      mouseY = null;
       resetAll();
     }
 
@@ -168,6 +278,7 @@
 
     if (!reduceMotion) {
       lensRoot.addEventListener("mousemove", (event) => {
+        if (isTouchMode()) return;
         if (lensSuppressed()) {
           mouseX = null;
           mouseY = null;
@@ -181,6 +292,7 @@
       });
 
       lensRoot.addEventListener("mouseleave", () => {
+        if (isTouchMode()) return;
         mouseX = null;
         mouseY = null;
         resetAll();
@@ -196,6 +308,17 @@
         mouseX = null;
         mouseY = null;
         resetAll();
+        stopShimmer();
+      });
+
+      document.addEventListener("filter-motion:off", () => {
+        if (isTouchMode()) startShimmer();
+      });
+
+      document.addEventListener("home-intro:done", () => {
+        layoutColumns();
+        measureCenters();
+        if (isTouchMode()) startShimmer();
       });
     }
 
@@ -206,10 +329,9 @@
         openPageInfo();
         return;
       }
-      // Photo modal open / nav navigation: relax the lens.
       mouseX = null;
       mouseY = null;
-      resetAll();
+      if (!isTouchMode()) resetAll();
     });
 
     if (pageModal) {
@@ -231,6 +353,12 @@
       resizeTimer = window.setTimeout(() => {
         layoutColumns();
         measureCenters();
+        if (isTouchMode()) {
+          applyTouchTransforms();
+          startShimmer();
+        } else {
+          resetAll();
+        }
       }, 120);
     });
 
@@ -239,8 +367,36 @@
       layoutColumns();
       window.requestAnimationFrame(() => {
         measureCenters();
-        resetAll();
+        if (isTouchMode()) {
+          applyTouchTransforms();
+          startShimmer();
+        } else {
+          resetAll();
+        }
       });
     });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopShimmer();
+      } else if (isTouchMode()) {
+        startShimmer();
+      }
+    });
+
+    if (motion) {
+      motion.subscribe(() => {
+        if (!isTouchMode()) return;
+        if (!shimmerRaf) applyTouchTransforms();
+      });
+    }
+
+    if (isTouchMode() && !reduceMotion) {
+      if (!document.body.classList.contains("home-intro-active")) {
+        startShimmer();
+      }
+    } else if (reduceMotion && isTouchMode()) {
+      clearInlineReveal();
+    }
   })();
 </script>

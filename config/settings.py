@@ -14,6 +14,9 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 _default_hosts = ["127.0.0.1", "localhost"]
 if os.getenv("VERCEL"):
     _default_hosts.extend([".vercel.app", "connorbrown.net", "www.connorbrown.net"])
+# Local phone testing via Cloudflare quick tunnels (DEBUG only).
+if DEBUG:
+    _default_hosts.append(".trycloudflare.com")
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", ",".join(_default_hosts)).split(",")
 
@@ -25,6 +28,8 @@ if os.getenv("VERCEL"):
             "https://www.connorbrown.net",
         ]
     )
+if DEBUG:
+    _default_csrf_origins.append("https://*.trycloudflare.com")
 
 CSRF_TRUSTED_ORIGINS = _default_csrf_origins + [
     origin.strip()
@@ -32,8 +37,8 @@ CSRF_TRUSTED_ORIGINS = _default_csrf_origins + [
     if origin.strip()
 ]
 
-if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Cloudflare Tunnel terminates TLS; Django still sees http://127.0.0.1.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

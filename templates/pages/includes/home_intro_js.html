@@ -72,8 +72,13 @@
       const container = welcome.parentElement;
       const available = container ? container.clientWidth : window.innerWidth;
       const cols = 3;
-      const usable = Math.max(available - 48, 200);
-      const cellSize = Math.min(usable / 7, MAX_CELL); // match menu cell scale
+      const isTouch =
+        (window.MapMotion && window.MapMotion.isTouch()) ||
+        document.body.classList.contains("map-touch");
+      // Desktop: keep menu-matched cell scale. Touch: enlarge trio so Connor fits.
+      const sideGutter = isTouch ? 72 : 48;
+      const usable = Math.max(available - sideGutter * 2, 200);
+      const cellSize = Math.min(usable / (isTouch ? 2.85 : 7), MAX_CELL);
       const width = Math.round(cols * cellSize);
       welcome.style.width = `${width}px`;
       welcome.style.maxWidth = `${width}px`;
@@ -82,6 +87,7 @@
       welcome.style.paddingLeft = "";
       welcome.style.paddingRight = "";
       welcome.style.setProperty("--dot-cols", String(cols));
+      welcome.style.setProperty("--dot-cell", `${cellSize}px`);
       return cellSize;
     }
 

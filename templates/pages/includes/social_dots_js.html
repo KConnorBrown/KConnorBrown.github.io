@@ -8,6 +8,7 @@
     const logos = dots.map((dot) => dot.querySelector(".corner-logo"));
     const labels = dots.map((dot) => dot.querySelector(".corner-label"));
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const motion = window.MapMotion || null;
 
     // Narrow local lens — much tighter than the main map field.
     const BULGE = 1.15;
@@ -20,6 +21,17 @@
     let mouseY = null;
     let frameQueued = false;
     let cornerActive = false;
+
+    function isTouchMode() {
+      return Boolean(
+        (motion && motion.isTouch()) || document.body.classList.contains("map-touch")
+      );
+    }
+
+    function gravityOffset() {
+      if (!motion) return { x: 0, y: 0 };
+      return motion.gravity();
+    }
 
     function measureCenters() {
       centers = discs.map((disc) => {
@@ -43,7 +55,34 @@
       }
     }
 
+    function showTouchChrome() {
+      logos.forEach((logo) => {
+        if (logo) logo.style.opacity = "1";
+      });
+      labels.forEach((label) => {
+        if (label) label.style.opacity = "1";
+      });
+    }
+
+    function applyGravityOnly() {
+      const g = gravityOffset();
+      discs.forEach((disc) => {
+        if (!disc) return;
+        if (g.x || g.y) {
+          disc.style.transform = `translate(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px)`;
+        } else {
+          disc.style.transform = "";
+        }
+      });
+      showTouchChrome();
+      setCornerActive(false);
+    }
+
     function resetCorners() {
+      if (isTouchMode()) {
+        applyGravityOnly();
+        return;
+      }
       discs.forEach((disc, i) => {
         if (!disc) return;
         disc.style.transform = "";
@@ -55,6 +94,10 @@
 
     function applyCornerLens() {
       frameQueued = false;
+      if (isTouchMode()) {
+        applyGravityOnly();
+        return;
+      }
       if (mouseX === null) {
         resetCorners();
         return;
@@ -117,21 +160,30 @@
 
     if (!reduceMotion) {
       document.addEventListener("mousemove", (event) => {
+        if (isTouchMode()) return;
         mouseX = event.clientX + window.scrollX;
         mouseY = event.clientY + window.scrollY;
         queueFrame();
       });
     } else {
-      logos.forEach((logo) => {
-        if (logo) logo.style.opacity = "1";
-      });
-      labels.forEach((label) => {
-        if (label) label.style.opacity = "1";
+      showTouchChrome();
+    }
+
+    if (isTouchMode()) {
+      showTouchChrome();
+      applyGravityOnly();
+    }
+
+    if (motion) {
+      motion.subscribe(() => {
+        if (!isTouchMode()) return;
+        applyGravityOnly();
       });
     }
 
     window.addEventListener("resize", () => {
       measureCenters();
+      if (isTouchMode()) applyGravityOnly();
     });
 
     window.addEventListener("scroll", () => {
