@@ -1,10 +1,20 @@
 {% extends "pages/base.html" %}
 
+{% block body_class %}page-map{% endblock %}
+
 {% block content %}
-  <section class="section">
+  <section class="section photo-stream-section is-map">
+    {% include "journal/includes/photo_dots.html" %}
+  </section>
+
+  <section class="section map-content">
     <p class="hero-kicker"><a href="{% url 'writing_home' %}">Writing</a></p>
     <h1>{{ post.title }}</h1>
     <p class="meta">{{ post.get_post_type_display }}</p>
     <div class="prose">{{ post.rendered_body|safe }}</div>
   </section>
+{% endblock %}
+
+{% block extra_js %}
+  {% include "journal/includes/dot_map_js.html" %}
 {% endblock %}

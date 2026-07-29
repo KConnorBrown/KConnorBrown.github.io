@@ -1,0 +1,152 @@
+{% extends "pages/base.html" %}
+
+{% block content %}
+  <section class="section photo-stream-section">
+    <div class="photo-stream-header">
+      <div>
+        <h1>{{ title }}</h1>
+        <p class="section-intro">{{ intro }}</p>
+      </div>
+      <p class="meta photo-stream-count">
+        <a href="{% url 'photo_journal' %}">← Public grid</a>
+        ·
+        <a href="{% url 'admin:journal_journalentry_changelist' %}">Django admin</a>
+      </p>
+    </div>
+
+    {% if messages %}
+      <ul class="curate-messages">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <nav class="collection-nav" aria-label="Curation filters">
+      <a class="collection-chip{% if status == 'published' and not active_tag %} is-active{% endif %}" href="{% url 'curate_photo_journal' %}?status=published">
+        Published ({{ counts.published }})
+      </a>
+      <a class="collection-chip{% if status == 'hidden' %} is-active{% endif %}" href="{% url 'curate_photo_journal' %}?status=hidden">
+        Hidden ({{ counts.hidden }})
+      </a>
+      <a class="collection-chip{% if status == 'untagged' %} is-active{% endif %}" href="{% url 'curate_photo_journal' %}?status=untagged">
+        Untagged ({{ counts.untagged }})
+      </a>
+      <a class="collection-chip{% if status == 'all' and not active_tag %} is-active{% endif %}" href="{% url 'curate_photo_journal' %}?status=all">
+        All ({{ counts.all }})
+      </a>
+    </nav>
+
+    {% if tags %}
+      <nav class="collection-nav" aria-label="Tag filters">
+        {% for tag in tags %}
+          <a
+            class="collection-chip{% if active_tag and active_tag.pk == tag.pk %} is-active{% endif %}"
+            href="{% url 'curate_photo_journal' %}?status={{ status }}&tag={{ tag.slug }}"
+          >{{ tag.name }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+
+    {% if entries %}
+      <form method="post" action="{% url 'bulk_curate_photos' %}" id="curate-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+        <div class="curate-toolbar">
+          <label class="curate-select-all">
+            <input type="checkbox" id="select-all">
+            Select all on this page
+          </label>
+          <span class="meta" id="selection-count">0 selected</span>
+          <div class="curate-actions">
+            <button type="submit" name="action" value="hide" class="button-secondary">Hide selected</button>
+            <button type="submit" name="action" value="publish" class="button-secondary">Publish selected</button>
+            <button
+              type="submit"
+              name="action"
+              value="delete"
+              class="button-danger"
+              onclick="return confirm('Delete selected photos permanently? This cannot be undone.');"
+            >Delete selected</button>
+          </div>
+        </div>
+
+        <div class="curate-tag-panel">
+          <p class="meta">Batch tags for selection:</p>
+          <div class="curate-tag-list">
+            {% for tag in tags %}
+              <label class="curate-tag-option">
+                <input type="checkbox" name="tag_ids" value="{{ tag.pk }}">
+                {{ tag.name }}
+              </label>
+            {% endfor %}
+          </div>
+          <div class="curate-actions">
+            <button type="submit" name="action" value="add_tags" class="button-secondary">Add tags to selected</button>
+            <button type="submit" name="action" value="remove_tags" class="button-secondary">Remove tags from selected</button>
+          </div>
+        </div>
+
+        <div class="photo-stream curate-stream">
+          {% for entry in entries %}
+            <label class="photo-stream-item curate-item">
+              <input
+                type="checkbox"
+                name="entry_ids"
+                value="{{ entry.pk }}"
+                class="curate-checkbox"
+              >
+              {% if entry.photo %}
+                <img src="{{ entry.photo.url }}" alt="{{ entry.title }}" loading="lazy">
+              {% endif %}
+              {% if not entry.is_published %}
+                <span class="photo-stream-badge">Hidden</span>
+              {% endif %}
+              {% with entry_tags=entry.tags.all %}
+                {% if entry_tags %}
+                  <span class="photo-stream-tags">
+                    {% for tag in entry_tags %}{{ tag.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                  </span>
+                {% endif %}
+              {% endwith %}
+            </label>
+          {% endfor %}
+        </div>
+      </form>
+    {% else %}
+      <div class="placeholder">
+        <p>No photos in this filter.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (() => {
+      const selectAll = document.getElementById("select-all");
+      const checkboxes = Array.from(document.querySelectorAll(".curate-checkbox"));
+      const countEl = document.getElementById("selection-count");
+      if (!selectAll || !countEl) return;
+
+      function updateCount() {
+        const selected = checkboxes.filter((box) => box.checked).length;
+        countEl.textContent = `${selected} selected`;
+      }
+
+      selectAll.addEventListener("change", () => {
+        checkboxes.forEach((box) => {
+          box.checked = selectAll.checked;
+        });
+        updateCount();
+      });
+
+      checkboxes.forEach((box) => {
+        box.addEventListener("change", updateCount);
+      });
+
+      updateCount();
+    })();
+  </script>
+{% endblock %}

@@ -1,28 +1,60 @@
 from django.db import models
 
 
-class JournalEntry(models.Model):
-    TAG_INTERIOR_DESIGN = "interior-design"
-    TAG_GARDENING = "gardening"
-    TAG_SMALL_SPACES = "small-spaces"
-    TAG_CURATION = "curation"
-    TAG_CHOICES = [
-        (TAG_INTERIOR_DESIGN, "Interior design"),
-        (TAG_GARDENING, "Gardening"),
-        (TAG_SMALL_SPACES, "Small spaces"),
-        (TAG_CURATION, "Curation"),
-    ]
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    slug = models.SlugField(unique=True)
 
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class JournalEntry(models.Model):
     title = models.CharField(max_length=200)
     caption = models.TextField(blank=True)
     photo = models.ImageField(upload_to="journal/")
     entry_date = models.DateField()
-    tag = models.CharField(max_length=30, choices=TAG_CHOICES, default=TAG_CURATION)
+    tags = models.ManyToManyField(Tag, related_name="entries", blank=True)
+    instagram_shortcode = models.CharField(max_length=32, blank=True, null=True, unique=True)
+    is_published = models.BooleanField(
+        default=True,
+        help_text="Uncheck to hide from public grids without deleting.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-entry_date", "-created_at"]
         verbose_name_plural = "journal entries"
+
+    def __str__(self):
+        return self.title
+
+    def delete(self, using=None, keep_parents=False):
+        storage = self.photo.storage
+        path = self.photo.name
+        super().delete(using=using, keep_parents=keep_parents)
+        if path:
+            storage.delete(path)
+
+
+class PhotoCollection(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(unique=True)
+    summary = models.TextField(blank=True)
+    entries = models.ManyToManyField(
+        JournalEntry,
+        related_name="collections",
+        blank=True,
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "title"]
 
     def __str__(self):
         return self.title

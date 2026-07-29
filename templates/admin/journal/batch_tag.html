@@ -1,0 +1,61 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <h1>{{ title }}</h1>
+  <p>
+    {% if mode == "add" %}
+      Choose one or more tags to <strong>add</strong> to the
+      <strong>{{ queryset|length }}</strong> selected photo(s).
+      Existing tags on those photos are kept.
+    {% else %}
+      Choose one or more tags to <strong>remove</strong> from the
+      <strong>{{ queryset|length }}</strong> selected photo(s).
+    {% endif %}
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="{{ action_name }}">
+    <input type="hidden" name="confirm_batch_tag" value="1">
+    {% for obj in queryset %}
+      <input type="hidden" name="_selected_action" value="{{ obj.pk }}">
+    {% endfor %}
+
+    <fieldset class="module aligned">
+      <h2>Tags</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;padding:12px 16px;">
+        {% for tag in tags %}
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="tag_ids" value="{{ tag.pk }}">
+            {{ tag.name }}
+          </label>
+        {% empty %}
+          <p>No tags exist yet. Create some under Journal → Tags first.</p>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div class="submit-row" style="margin-top:16px;">
+      <input type="submit" value="{% if mode == 'add' %}Add tags{% else %}Remove tags{% endif %}" class="default">
+      <a href="{% url 'admin:journal_journalentry_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+  </form>
+
+  <h2 style="margin-top:32px;">Selected photos</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;">
+    {% for entry in queryset %}
+      <div style="text-align:center;">
+        {% if entry.photo %}
+          <img
+            src="{{ entry.photo.url }}"
+            alt="{{ entry.title }}"
+            style="width:96px;height:96px;object-fit:cover;border-radius:8px;"
+          >
+        {% endif %}
+        <div style="font-size:11px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          {{ entry.title }}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

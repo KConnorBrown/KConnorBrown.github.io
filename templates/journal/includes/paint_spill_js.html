@@ -1,0 +1,402 @@
+<script>
+  (() => {
+    const spill = document.getElementById("paint-spill");
+    const map = document.getElementById("photo-stream");
+    if (!map) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const DEFAULT_BG = getComputedStyle(document.documentElement)
+      .getPropertyValue("--bg")
+      .trim() || "#f7f5f1";
+    const BASE_PATH = "{% url 'photo_journal' %}";
+    // Crossing the full set (or shedding most of the grid) uses a full rebuild
+    // so kept dots don't teleport when the layout collapses.
+    const REBUILD_HIDE_THRESHOLD = 48;
+
+    let activeSlug =
+      document.querySelector(".corner-dot-filter.is-selected")?.dataset.filterSlug ||
+      new URLSearchParams(window.location.search).get("tag") ||
+      null;
+    let busy = false;
+
+    function photos() {
+      return Array.from(map.querySelectorAll(".dot-photo"));
+    }
+
+    function matches(photo, slug) {
+      if (!slug) return true;
+      const tags = (photo.dataset.tags || "").trim().split(/\s+/).filter(Boolean);
+      return tags.includes(slug);
+    }
+
+    function currentBg() {
+      return (
+        getComputedStyle(document.body).getPropertyValue("--journal-bg").trim() ||
+        DEFAULT_BG
+      );
+    }
+
+    function setBackground(color) {
+      if (color) {
+        document.body.style.setProperty("--journal-bg", color);
+        document.body.classList.add("page-journal-filter");
+        document.body.style.background = color;
+      } else {
+        document.body.style.removeProperty("--journal-bg");
+        document.body.classList.remove("page-journal-filter");
+        document.body.style.background = "";
+      }
+    }
+
+    function assignFallIndex(nodes) {
+      nodes.forEach((node, i) => {
+        node.style.setProperty("--fall-i", String(Math.min(i, 42)));
+        node.style.removeProperty("--rain-x");
+      });
+    }
+
+    // Stagger + slight lateral drift so the rise reads as rain, not a curtain.
+    function assignRainIndex(nodes) {
+      const order = nodes.slice();
+      for (let i = order.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = order[i];
+        order[i] = order[j];
+        order[j] = tmp;
+      }
+      order.forEach((node, i) => {
+        node.style.setProperty("--fall-i", String(Math.min(i, 48)));
+        const drift = Math.round((Math.random() - 0.5) * 36);
+        node.style.setProperty("--rain-x", `${drift}px`);
+      });
+    }
+
+    function staggerMs(count, step, base) {
+      if (reduceMotion || !count) return 0;
+      return Math.min(Math.max(count, 1), 48) * step + base;
+    }
+
+    function wait(ms) {
+      return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    function playSpill({ spillColor, color, previousColor, x, y }) {
+      return new Promise((resolve) => {
+        if (!spill) {
+          setBackground(color);
+          resolve();
+          return;
+        }
+
+        const destination = color || DEFAULT_BG;
+        const paint = spillColor || destination;
+
+        if (reduceMotion) {
+          setBackground(color);
+          resolve();
+          return;
+        }
+
+        const originX = typeof x === "number" ? x : window.innerWidth * 0.08;
+        const originY = typeof y === "number" ? y : window.innerHeight * 0.5;
+        const radius = Math.ceil(
+          Math.hypot(
+            Math.max(originX, window.innerWidth - originX),
+            Math.max(originY, window.innerHeight - originY)
+          ) + 80
+        );
+
+        document.body.style.background = previousColor || currentBg() || DEFAULT_BG;
+
+        spill.hidden = false;
+        spill.style.background = paint;
+        spill.style.setProperty("--spill-x", `${originX}px`);
+        spill.style.setProperty("--spill-y", `${originY}px`);
+        spill.style.setProperty("--spill-size", `${radius * 2}px`);
+        spill.classList.remove("is-spilling");
+        void spill.offsetWidth;
+        spill.classList.add("is-spilling");
+
+        window.setTimeout(() => {
+          setBackground(color);
+          spill.classList.remove("is-spilling");
+          spill.hidden = true;
+          resolve();
+        }, 780);
+      });
+    }
+
+    function notifyMap() {
+      window.dispatchEvent(new CustomEvent("journal-filter:changed"));
+    }
+
+    function filterLabel(dot) {
+      return (
+        dot.querySelector(".corner-label")?.textContent?.replace(/\s+/g, " ").trim() ||
+        dot.dataset.filterSlug
+      );
+    }
+
+    function updateFilterChrome(slug) {
+      document.querySelectorAll(".corner-dot-filter").forEach((dot) => {
+        const on = Boolean(slug && dot.dataset.filterSlug === slug);
+        const label = filterLabel(dot);
+        dot.classList.toggle("is-selected", on);
+        if (on) {
+          dot.href = BASE_PATH;
+          dot.setAttribute("aria-label", `Clear ${label} filter`);
+        } else {
+          dot.href = `${BASE_PATH}?tag=${encodeURIComponent(dot.dataset.filterSlug)}`;
+          dot.setAttribute("aria-label", `Filter by ${label}`);
+        }
+      });
+
+      document.querySelectorAll(".page-info-tag").forEach((link) => {
+        try {
+          const url = new URL(link.href, window.location.href);
+          const tag = url.searchParams.get("tag");
+          const isAll =
+            !tag && url.pathname.replace(/\/$/, "") === BASE_PATH.replace(/\/$/, "");
+          link.classList.toggle("is-active", slug ? tag === slug : isAll);
+        } catch (error) {
+          // ignore malformed hrefs
+        }
+      });
+    }
+
+    function setUrl(slug, { replace = false } = {}) {
+      const url = new URL(window.location.href);
+      if (slug) url.searchParams.set("tag", slug);
+      else url.searchParams.delete("tag");
+      const method = replace ? "replaceState" : "pushState";
+      history[method]({ tag: slug }, "", url);
+    }
+
+    function fallOut(nodes) {
+      if (!nodes.length) return Promise.resolve();
+      if (reduceMotion) {
+        nodes.forEach((photo) => {
+          photo.classList.remove("is-filter-raining", "is-filter-leaving");
+          photo.classList.add("is-filter-hidden");
+        });
+        return Promise.resolve();
+      }
+      assignFallIndex(nodes);
+      nodes.forEach((photo) => {
+        photo.classList.remove("is-filter-raining");
+        photo.classList.add("is-filter-leaving");
+      });
+      return wait(staggerMs(nodes.length, 18, 560)).then(() => {
+        nodes.forEach((photo) => {
+          photo.classList.remove("is-filter-leaving");
+          photo.classList.add("is-filter-hidden");
+        });
+      });
+    }
+
+    function rainIn(nodes) {
+      if (!nodes.length) {
+        notifyMap();
+        return Promise.resolve();
+      }
+      if (reduceMotion) {
+        nodes.forEach((photo) => {
+          photo.classList.remove("is-filter-hidden", "is-filter-leaving", "is-filter-raining");
+        });
+        notifyMap();
+        return Promise.resolve();
+      }
+
+      // Seat them in the final grid first (hidden via pre-rain class opacity),
+      // then rise from below so they stick to those slots.
+      nodes.forEach((photo) => {
+        photo.classList.remove("is-filter-hidden", "is-filter-leaving");
+        photo.classList.add("is-filter-raining");
+      });
+      assignRainIndex(nodes);
+      notifyMap();
+      // Retrigger animation after layout so transform origin matches grid seats.
+      void map.offsetWidth;
+      nodes.forEach((photo) => {
+        photo.classList.remove("is-filter-raining");
+        void photo.offsetWidth;
+        photo.classList.add("is-filter-raining");
+      });
+
+      return wait(staggerMs(nodes.length, 22, 880)).then(() => {
+        nodes.forEach((photo) => {
+          photo.classList.remove("is-filter-raining");
+          photo.style.removeProperty("--rain-x");
+        });
+        notifyMap();
+      });
+    }
+
+    function applyVisibility(slug) {
+      photos().forEach((photo) => {
+        const show = matches(photo, slug);
+        photo.classList.toggle("is-filter-hidden", !show);
+        photo.classList.remove("is-filter-leaving", "is-filter-raining");
+      });
+    }
+
+    function setFilterMotion(active) {
+      document.body.classList.toggle("filter-motion-active", active);
+      if (active) {
+        document.dispatchEvent(new CustomEvent("filter-motion:on"));
+      } else {
+        document.dispatchEvent(new CustomEvent("filter-motion:off"));
+      }
+    }
+
+    function applyFilter(slug, { x, y, color, push = true, spillAnim = true } = {}) {
+      if (busy) return Promise.resolve();
+      busy = true;
+      setFilterMotion(true);
+
+      const previousSlug = activeSlug;
+      const nextSlug = slug || null;
+      let paintColor = color || null;
+      if (nextSlug && !paintColor) {
+        const dot = document.querySelector(
+          `.corner-dot-filter[data-filter-slug="${CSS.escape(nextSlug)}"]`
+        );
+        paintColor = dot?.dataset.filterColor || null;
+      }
+
+      const previousColor = currentBg();
+      const all = photos();
+      const visible = all.filter((photo) => !photo.classList.contains("is-filter-hidden"));
+      const toHide = visible.filter((photo) => !matches(photo, nextSlug));
+      const toShow = all.filter(
+        (photo) => matches(photo, nextSlug) && photo.classList.contains("is-filter-hidden")
+      );
+      const toKeep = visible.filter((photo) => matches(photo, nextSlug));
+
+      // Full journal ↔ tag (or shedding most of the grid): clear the board,
+      // then rain the destination set up into its compacted layout.
+      const crossesFullSet = !previousSlug || !nextSlug;
+      const rebuild =
+        crossesFullSet || toHide.length >= REBUILD_HIDE_THRESHOLD;
+
+      activeSlug = nextSlug;
+      updateFilterChrome(nextSlug);
+      if (push) setUrl(nextSlug);
+
+      const spillPromise = spillAnim
+        ? playSpill({
+            spillColor: nextSlug ? paintColor : DEFAULT_BG,
+            color: nextSlug ? paintColor : null,
+            previousColor,
+            x,
+            y,
+          })
+        : Promise.resolve().then(() => setBackground(nextSlug ? paintColor : null));
+
+      const motion = rebuild
+        ? fallOut(visible).then(() => {
+            applyVisibility(nextSlug);
+            notifyMap();
+            const rainNodes = all.filter((photo) => matches(photo, nextSlug));
+            return rainIn(rainNodes);
+          })
+        : fallOut(toHide).then(() => {
+            notifyMap();
+            return rainIn(toShow);
+          });
+
+      return motion
+        .then(() => spillPromise)
+        .then(() => {
+          notifyMap();
+          busy = false;
+          setFilterMotion(false);
+          void toKeep;
+        })
+        .catch(() => {
+          busy = false;
+          setFilterMotion(false);
+        });
+    }
+
+    if (document.body.classList.contains("page-journal-filter")) {
+      const bg = getComputedStyle(document.body).getPropertyValue("--journal-bg").trim();
+      if (bg) document.body.style.background = bg;
+    }
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        const filterDot = event.target.closest(".corner-dot-filter");
+        if (!filterDot) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const rect = filterDot.getBoundingClientRect();
+        applyFilter(
+          filterDot.classList.contains("is-selected") ? null : filterDot.dataset.filterSlug,
+          {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+            color: filterDot.dataset.filterColor || null,
+            push: true,
+            spillAnim: true,
+          }
+        );
+      },
+      true
+    );
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        const tagLink = event.target.closest(".page-info-tag");
+        if (!tagLink) return;
+        let url;
+        try {
+          url = new URL(tagLink.href, window.location.href);
+        } catch (error) {
+          return;
+        }
+        if (url.pathname.replace(/\/$/, "") !== BASE_PATH.replace(/\/$/, "")) return;
+        const slug = url.searchParams.get("tag");
+        const rail = slug
+          ? document.querySelector(`.corner-dot-filter[data-filter-slug="${CSS.escape(slug)}"]`)
+          : null;
+        if (slug && !rail) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        applyFilter(slug, {
+          x: window.innerWidth * 0.5,
+          y: window.innerHeight * 0.5,
+          color: rail?.dataset.filterColor || null,
+          push: true,
+          spillAnim: Boolean(slug || activeSlug),
+        });
+      },
+      true
+    );
+
+    window.addEventListener("popstate", () => {
+      const slug = new URLSearchParams(window.location.search).get("tag");
+      const rail = slug
+        ? document.querySelector(`.corner-dot-filter[data-filter-slug="${CSS.escape(slug)}"]`)
+        : null;
+      applyFilter(slug, {
+        color: rail?.dataset.filterColor || null,
+        push: false,
+        spillAnim: true,
+        x: window.innerWidth * 0.08,
+        y: window.innerHeight * 0.5,
+      });
+    });
+  })();
+</script>

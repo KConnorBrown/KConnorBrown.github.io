@@ -1,0 +1,270 @@
+<script>
+  (() => {
+    if (!document.body.classList.contains("page-home")) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const welcome = document.getElementById("home-welcome");
+    const menuWrap = document.getElementById("home-menu-wrap");
+    const menuMap = document.getElementById("photo-stream");
+    const corners = document.getElementById("corner-dots");
+
+    const BULGE = 1.4;
+    const SIGMA_CELLS = 2.0;
+    const MIN_SCALE = 0.32;
+    const MAX_CELL = 150;
+    // Runway before/after the trio so each word can swell and settle.
+    const SWEEP_LEAD_CELLS = 3.4;
+
+    // Pacing: hold the greeting so it can be read, then sweep.
+    const PAUSE_AFTER_WELCOME = 280;
+    const PAUSE_AFTER_CORNERS = 910; // includes ~0.75s to read Hi / I'm / Connor
+    const SWEEP_MS = 2080;
+    const PAUSE_BEFORE_LEAVE = 160;
+    const PAUSE_BEFORE_MENU = 180;
+
+    function wait(ms) {
+      return new Promise((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    function assignFallIndex(nodes) {
+      nodes.forEach((node, i) => {
+        node.style.setProperty("--fall-i", String(Math.min(i, 42)));
+      });
+    }
+
+    function enterMs(count) {
+      return Math.min(Math.max(count, 1), 42) * 28 + 720;
+    }
+
+    function leaveMs(count) {
+      // Sequential drop: delay between starts + one exit duration.
+      return Math.max(count - 1, 0) * 320 + 620;
+    }
+
+    function playLeave(mapEl) {
+      const items = mapEl ? Array.from(mapEl.querySelectorAll(".dot-item")) : [];
+      if (!mapEl || !items.length) return Promise.resolve();
+      if (reduceMotion) {
+        mapEl.classList.add("is-gone");
+        return Promise.resolve();
+      }
+      // Hi → I'm → Connor, dropping downward with a lingering stagger.
+      items.forEach((node, i) => {
+        node.style.setProperty("--drop-i", String(i));
+      });
+      mapEl.classList.remove(
+        "is-entering",
+        "is-settled",
+        "is-resting",
+        "is-leaving",
+        "is-rolling-out"
+      );
+      mapEl.classList.add("is-dropping-out");
+      return wait(leaveMs(items.length)).then(() => {
+        mapEl.classList.add("is-gone");
+        mapEl.classList.remove("is-dropping-out");
+        mapEl.setAttribute("aria-hidden", "true");
+      });
+    }
+
+    function layoutWelcome() {
+      if (!welcome) return 0;
+      const container = welcome.parentElement;
+      const available = container ? container.clientWidth : window.innerWidth;
+      const cols = 3;
+      const usable = Math.max(available - 48, 200);
+      const cellSize = Math.min(usable / 7, MAX_CELL); // match menu cell scale
+      const width = Math.round(cols * cellSize);
+      welcome.style.width = `${width}px`;
+      welcome.style.maxWidth = `${width}px`;
+      welcome.style.marginLeft = "auto";
+      welcome.style.marginRight = "auto";
+      welcome.style.paddingLeft = "";
+      welcome.style.paddingRight = "";
+      welcome.style.setProperty("--dot-cols", String(cols));
+      return cellSize;
+    }
+
+    function welcomeNodes() {
+      return welcome ? Array.from(welcome.querySelectorAll(".dot-item")) : [];
+    }
+
+    function measureCenters(nodes) {
+      return nodes.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return {
+          x: rect.left + window.scrollX + rect.width / 2,
+          y: rect.top + window.scrollY + rect.height / 2,
+        };
+      });
+    }
+
+    function applyWelcomeLens(pointerX, pointerY, cellSize, nodes, discs, centers) {
+      const sigma = cellSize * SIGMA_CELLS;
+      const twoSigmaSq = 2 * sigma * sigma;
+      for (let i = 0; i < nodes.length; i += 1) {
+        const disc = discs[i];
+        if (!disc) continue;
+        const dx = centers[i].x - pointerX;
+        const dy = centers[i].y - pointerY;
+        const distSq = dx * dx + dy * dy;
+        const g = Math.exp(-distSq / twoSigmaSq);
+        const dist = Math.sqrt(distSq);
+        const safeDist = dist || 1;
+        const shift = BULGE * dist * g;
+        const tangential = 1 + BULGE * g;
+        const radial = 1 + BULGE * g * (1 - distSq / (sigma * sigma));
+        const scale = Math.max(Math.min(tangential, radial), MIN_SCALE);
+        const offsetX = (dx / safeDist) * shift;
+        const offsetY = (dy / safeDist) * shift;
+        disc.style.transform = `translate(${offsetX.toFixed(2)}px, ${offsetY.toFixed(2)}px) scale(${scale.toFixed(3)})`;
+        nodes[i].style.zIndex = String(1 + Math.round(scale * 100));
+      }
+    }
+
+    function resetWelcomeLens(nodes, discs) {
+      nodes.forEach((node, i) => {
+        const disc = discs[i];
+        if (disc) disc.style.transform = "";
+        node.style.zIndex = "";
+      });
+      if (welcome) welcome.classList.add("is-resting");
+    }
+
+    function sweepRead(cellSize) {
+      const nodes = welcomeNodes();
+      const discs = nodes.map((n) => n.querySelector(".dot-disc"));
+      layoutWelcome();
+      const centers = measureCenters(nodes);
+      if (!centers.length) return Promise.resolve();
+
+      const lead = cellSize * SWEEP_LEAD_CELLS;
+      // Start well left of "Hi" and finish well right of "Connor" so scale
+      // ramps continuously instead of popping at the endpoints.
+      const startX = centers[0].x - lead;
+      const endX = centers[centers.length - 1].x + lead;
+      const y = centers[Math.floor(centers.length / 2)].y;
+
+      if (welcome) welcome.classList.remove("is-resting");
+      discs.forEach((disc) => {
+        if (disc) disc.style.willChange = "transform";
+      });
+
+      return new Promise((resolve) => {
+        const t0 = performance.now();
+        function frame(now) {
+          const t = Math.min(1, (now - t0) / SWEEP_MS);
+          const x = startX + (endX - startX) * t;
+          applyWelcomeLens(x, y, cellSize, nodes, discs, centers);
+          if (t < 1) {
+            window.requestAnimationFrame(frame);
+          } else {
+            // Path already ends at rest scale — clear without a visual snap.
+            resetWelcomeLens(nodes, discs);
+            discs.forEach((disc) => {
+              if (disc) disc.style.willChange = "";
+            });
+            resolve();
+          }
+        }
+        window.requestAnimationFrame(frame);
+      });
+    }
+
+    function playEnter(mapEl) {
+      const mapItems = mapEl ? Array.from(mapEl.querySelectorAll(".dot-item, .corner-dot")) : [];
+      const items = mapEl
+        ? Array.from(
+            mapEl.querySelectorAll(
+              mapEl.id === "corner-dots" ? ".corner-dot" : ".dot-item"
+            )
+          )
+        : [];
+      assignFallIndex(items.length ? items : mapItems);
+
+      if (reduceMotion) {
+        if (mapEl) {
+          mapEl.classList.remove("is-booting", "is-entering", "is-leaving");
+          mapEl.classList.add("is-settled");
+        }
+        return Promise.resolve();
+      }
+
+      const count = items.length || mapItems.length;
+      return new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          if (mapEl) {
+            mapEl.classList.remove("is-booting");
+            mapEl.classList.add("is-entering");
+          }
+          window.setTimeout(() => {
+            if (mapEl) {
+              mapEl.classList.remove("is-entering");
+              mapEl.classList.add("is-settled");
+            }
+            resolve();
+          }, enterMs(count));
+        });
+      });
+    }
+
+    function finishToMenu() {
+      document.body.classList.add("is-home-ready");
+      document.body.classList.remove("home-intro-active");
+      if (menuWrap) menuWrap.setAttribute("aria-hidden", "false");
+      if (menuMap) {
+        menuMap.classList.remove("is-booting", "is-entering", "is-leaving");
+        menuMap.classList.add("is-settled", "is-resting");
+      }
+      document.dispatchEvent(new CustomEvent("home-intro:done"));
+      // Relayout after the menu is visible so the map gets a real width.
+      window.requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent("journal-filter:changed"));
+        window.requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent("journal-filter:changed"));
+        });
+      });
+    }
+
+    async function runIntro() {
+      const cellSize = layoutWelcome();
+
+      if (reduceMotion) {
+        if (welcome) welcome.classList.add("is-gone");
+        if (corners) {
+          corners.classList.remove("is-booting");
+          corners.classList.add("is-settled");
+        }
+        finishToMenu();
+        return;
+      }
+
+      if (menuMap) {
+        menuMap.classList.add("is-booting");
+        menuMap.classList.remove("is-entering", "is-settled");
+      }
+
+      await playEnter(welcome);
+      await wait(PAUSE_AFTER_WELCOME);
+
+      await playEnter(corners);
+      await wait(PAUSE_AFTER_CORNERS);
+
+      await sweepRead(cellSize || 96);
+      await wait(PAUSE_BEFORE_LEAVE);
+
+      await playLeave(welcome);
+      await wait(PAUSE_BEFORE_MENU);
+      finishToMenu();
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(runIntro);
+    });
+
+    window.addEventListener("resize", () => {
+      if (!document.body.classList.contains("home-intro-active")) return;
+      if (welcome && !welcome.classList.contains("is-gone")) layoutWelcome();
+    });
+  })();
+</script>

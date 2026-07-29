@@ -1,0 +1,246 @@
+<script>
+  (() => {
+    const map = document.getElementById("photo-stream");
+    if (!map || !map.classList.contains("dot-map")) return;
+
+    let items = [];
+    let discs = [];
+    let images = [];
+    let labels = [];
+
+    const pageBtn = document.getElementById("page-indicator");
+    const pageModal = document.getElementById("page-info-modal");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function refreshItems() {
+      items = Array.from(map.querySelectorAll(".dot-item:not(.is-filter-hidden)"));
+      discs = items.map((item) => item.querySelector(".dot-disc"));
+      images = discs.map((disc) => (disc ? disc.querySelector("img") : null));
+      labels = discs.map((disc) => (disc ? disc.querySelector(".dot-label") : null));
+    }
+
+    refreshItems();
+    if (!items.length) return;
+
+    // Smooth fisheye warp with no lens boundary. Space is remapped radially:
+    //   R(r) = r * (1 + B * g),  g = exp(-r^2 / (2 * sigma^2))
+    // Each dot moves to its remapped position, and its scale equals the
+    // local stretch of the warped fabric in whichever direction is most
+    // compressed (min of radial and tangential stretch). Because both
+    // come from the same mapping, dots can never overlap.
+    const BULGE = 1.4;
+    const SIGMA_CELLS = 2.0;
+    const MIN_SCALE = 0.32;
+    const MAX_CELL = 150;
+
+    let cellSize = 0;
+    let centers = [];
+    let mouseX = null;
+    let mouseY = null;
+    let frameQueued = false;
+
+    // First row is always the site nav, so columns equal the nav count.
+    // Cap cell size and center the grid so edge dots have room to bulge.
+    function layoutColumns() {
+      // Prefer the section width — on the homepage the menu wrap starts hidden
+      // and can report 0, which previously left the map with no width.
+      const section = map.closest(".photo-stream-section");
+      const available =
+        (section && section.clientWidth) ||
+        (map.parentElement && map.parentElement.clientWidth) ||
+        map.clientWidth ||
+        window.innerWidth;
+      if (!available) return;
+      const navCount = Math.max(1, parseInt(map.dataset.navCount || "8", 10));
+      const cols = navCount;
+      // Leave a little side padding so leftmost/rightmost bulges stay on-screen.
+      const usable = Math.max(available - 48, 200);
+      cellSize = Math.min(usable / cols, MAX_CELL);
+      map.style.width = `${Math.round(cols * cellSize)}px`;
+      map.style.maxWidth = `${Math.round(cols * cellSize)}px`;
+      map.style.paddingLeft = "";
+      map.style.paddingRight = "";
+      map.style.marginLeft = "auto";
+      map.style.marginRight = "auto";
+      map.style.setProperty("--dot-cols", String(cols));
+      map.style.setProperty("--dot-cell", `${cellSize}px`);
+    }
+
+    function measureCenters() {
+      centers = items.map((item) => {
+        const rect = item.getBoundingClientRect();
+        return {
+          x: rect.left + window.scrollX + rect.width / 2,
+          y: rect.top + window.scrollY + rect.height / 2,
+        };
+      });
+    }
+
+    function resetAll() {
+      map.classList.add("is-resting");
+      items.forEach((item, i) => {
+        const disc = discs[i];
+        if (!disc) return;
+        disc.style.transform = "";
+        item.style.zIndex = "";
+        if (images[i]) images[i].style.opacity = "";
+        if (labels[i]) labels[i].style.opacity = "";
+      });
+    }
+
+    function contentReveal(dist) {
+      // Full at the center, faded by ~1 cell away — same falloff as photos.
+      return Math.min(Math.max((1 - dist / cellSize) / 0.5, 0), 1);
+    }
+
+    function lensSuppressed() {
+      return (
+        document.body.classList.contains("social-lens-active") ||
+        document.body.classList.contains("filter-motion-active") ||
+        document.body.classList.contains("home-intro-active")
+      );
+    }
+
+    function applyLens() {
+      frameQueued = false;
+      if (mouseX === null) return;
+      if (lensSuppressed()) {
+        resetAll();
+        return;
+      }
+
+      const sigma = cellSize * SIGMA_CELLS;
+      const twoSigmaSq = 2 * sigma * sigma;
+      const B = BULGE;
+
+      for (let i = 0; i < items.length; i += 1) {
+        const disc = discs[i];
+        if (!disc) continue;
+        const dx = centers[i].x - mouseX;
+        const dy = centers[i].y - mouseY;
+        const distSq = dx * dx + dy * dy;
+        const g = Math.exp(-distSq / twoSigmaSq);
+        const dist = Math.sqrt(distSq);
+        const safeDist = dist || 1;
+        const shift = B * dist * g;
+        const tangential = 1 + B * g;
+        const radial = 1 + B * g * (1 - distSq / (sigma * sigma));
+        const scale = Math.max(Math.min(tangential, radial), MIN_SCALE);
+        const offsetX = (dx / safeDist) * shift;
+        const offsetY = (dy / safeDist) * shift;
+        const reveal = contentReveal(dist);
+
+        disc.style.transform = `translate(${offsetX.toFixed(2)}px, ${offsetY.toFixed(2)}px) scale(${scale.toFixed(3)})`;
+        items[i].style.zIndex = String(1 + Math.round(scale * 100));
+        if (images[i] && items[i].classList.contains("dot-photo")) {
+          images[i].style.opacity = reveal.toFixed(3);
+        }
+        if (labels[i]) {
+          labels[i].style.opacity = reveal.toFixed(3);
+        }
+      }
+    }
+
+    function queueFrame() {
+      if (!frameQueued) {
+        frameQueued = true;
+        window.requestAnimationFrame(applyLens);
+      }
+    }
+
+    function openPageInfo() {
+      if (!pageModal) return;
+      pageModal.hidden = false;
+      document.body.classList.add("modal-open");
+      resetAll();
+    }
+
+    function closePageInfo() {
+      if (!pageModal) return;
+      pageModal.hidden = true;
+      document.body.classList.remove("modal-open");
+    }
+
+    layoutColumns();
+    window.requestAnimationFrame(measureCenters);
+
+    const lensRoot = map.closest(".photo-stream-section") || map;
+
+    if (!reduceMotion) {
+      lensRoot.addEventListener("mousemove", (event) => {
+        if (lensSuppressed()) {
+          mouseX = null;
+          mouseY = null;
+          resetAll();
+          return;
+        }
+        map.classList.remove("is-resting");
+        mouseX = event.clientX + window.scrollX;
+        mouseY = event.clientY + window.scrollY;
+        queueFrame();
+      });
+
+      lensRoot.addEventListener("mouseleave", () => {
+        mouseX = null;
+        mouseY = null;
+        resetAll();
+      });
+
+      document.addEventListener("social-lens:on", () => {
+        mouseX = null;
+        mouseY = null;
+        resetAll();
+      });
+
+      document.addEventListener("filter-motion:on", () => {
+        mouseX = null;
+        mouseY = null;
+        resetAll();
+      });
+    }
+
+    map.addEventListener("click", (event) => {
+      const pageDot = event.target.closest(".dot-page");
+      if (pageDot) {
+        event.preventDefault();
+        openPageInfo();
+        return;
+      }
+      // Photo modal open / nav navigation: relax the lens.
+      mouseX = null;
+      mouseY = null;
+      resetAll();
+    });
+
+    if (pageModal) {
+      pageModal.addEventListener("click", (event) => {
+        if (event.target.closest("[data-close-page-info]")) {
+          closePageInfo();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !pageModal.hidden) {
+          closePageInfo();
+        }
+      });
+    }
+
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        layoutColumns();
+        measureCenters();
+      }, 120);
+    });
+
+    window.addEventListener("journal-filter:changed", () => {
+      refreshItems();
+      layoutColumns();
+      window.requestAnimationFrame(() => {
+        measureCenters();
+        resetAll();
+      });
+    });
+  })();
+</script>

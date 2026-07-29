@@ -1,7 +1,13 @@
 {% extends "pages/base.html" %}
 
+{% block body_class %}page-map{% endblock %}
+
 {% block content %}
-  <section class="section">
+  <section class="section photo-stream-section is-map">
+    {% include "journal/includes/photo_dots.html" %}
+  </section>
+
+  <section class="section map-content">
     <p class="hero-kicker"><a href="{% url 'project_list' %}">Development</a></p>
     <h1>{{ project.title }}</h1>
     <p class="section-intro">{{ project.summary }}</p>
@@ -10,9 +16,9 @@
       <p class="meta">{{ project.tech_stack }}</p>
     {% endif %}
 
-  {% if project.case_study %}
-    <div class="prose">{{ project.case_study|linebreaks }}</div>
-  {% endif %}
+    {% if project.case_study %}
+      <div class="prose">{{ project.case_study|linebreaks }}</div>
+    {% endif %}
 
     <div class="project-links">
       {% if project.live_url %}
@@ -23,4 +29,8 @@
       {% endif %}
     </div>
   </section>
+{% endblock %}
+
+{% block extra_js %}
+  {% include "journal/includes/dot_map_js.html" %}
 {% endblock %}

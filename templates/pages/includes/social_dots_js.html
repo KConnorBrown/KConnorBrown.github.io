@@ -1,0 +1,141 @@
+<script>
+  (() => {
+    const root = document.getElementById("corner-dots");
+    if (!root) return;
+
+    const dots = Array.from(root.querySelectorAll(".corner-dot"));
+    const discs = dots.map((dot) => dot.querySelector(".corner-disc"));
+    const logos = dots.map((dot) => dot.querySelector(".corner-logo"));
+    const labels = dots.map((dot) => dot.querySelector(".corner-label"));
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Narrow local lens — much tighter than the main map field.
+    const BULGE = 1.15;
+    const HIT_RADIUS = 88;
+    const SIGMA = 42;
+    const MIN_SCALE = 0.55;
+
+    let centers = [];
+    let mouseX = null;
+    let mouseY = null;
+    let frameQueued = false;
+    let cornerActive = false;
+
+    function measureCenters() {
+      centers = discs.map((disc) => {
+        if (!disc) return { x: 0, y: 0 };
+        const rect = disc.getBoundingClientRect();
+        return {
+          x: rect.left + window.scrollX + rect.width / 2,
+          y: rect.top + window.scrollY + rect.height / 2,
+        };
+      });
+    }
+
+    function setCornerActive(active) {
+      if (cornerActive === active) return;
+      cornerActive = active;
+      document.body.classList.toggle("social-lens-active", active);
+      if (active) {
+        document.dispatchEvent(new CustomEvent("social-lens:on"));
+      } else {
+        document.dispatchEvent(new CustomEvent("social-lens:off"));
+      }
+    }
+
+    function resetCorners() {
+      discs.forEach((disc, i) => {
+        if (!disc) return;
+        disc.style.transform = "";
+        if (logos[i]) logos[i].style.opacity = "";
+        if (labels[i]) labels[i].style.opacity = "";
+      });
+      setCornerActive(false);
+    }
+
+    function applyCornerLens() {
+      frameQueued = false;
+      if (mouseX === null) {
+        resetCorners();
+        return;
+      }
+
+      let nearest = Infinity;
+      for (let i = 0; i < centers.length; i += 1) {
+        const dx = centers[i].x - mouseX;
+        const dy = centers[i].y - mouseY;
+        nearest = Math.min(nearest, Math.sqrt(dx * dx + dy * dy));
+      }
+
+      if (nearest > HIT_RADIUS) {
+        resetCorners();
+        return;
+      }
+
+      setCornerActive(true);
+      const twoSigmaSq = 2 * SIGMA * SIGMA;
+
+      for (let i = 0; i < discs.length; i += 1) {
+        const disc = discs[i];
+        if (!disc) continue;
+        const dx = centers[i].x - mouseX;
+        const dy = centers[i].y - mouseY;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+        const g = Math.exp(-distSq / twoSigmaSq);
+
+        if (g < 0.01) {
+          disc.style.transform = "";
+          if (logos[i]) logos[i].style.opacity = "";
+          if (labels[i]) labels[i].style.opacity = "";
+          continue;
+        }
+
+        const safeDist = dist || 1;
+        const shift = BULGE * dist * g * 0.35;
+        const tangential = 1 + BULGE * g;
+        const radial = 1 + BULGE * g * (1 - distSq / (SIGMA * SIGMA));
+        const scale = Math.max(Math.min(tangential, radial), MIN_SCALE);
+        const offsetX = (dx / safeDist) * shift;
+        const offsetY = (dy / safeDist) * shift;
+        const reveal = Math.min(Math.max((1 - dist / (SIGMA * 1.4)) / 0.55, 0), 1);
+
+        disc.style.transform = `translate(${offsetX.toFixed(2)}px, ${offsetY.toFixed(2)}px) scale(${scale.toFixed(3)})`;
+        if (logos[i]) logos[i].style.opacity = reveal.toFixed(3);
+        if (labels[i]) labels[i].style.opacity = reveal.toFixed(3);
+      }
+    }
+
+    function queueFrame() {
+      if (!frameQueued) {
+        frameQueued = true;
+        window.requestAnimationFrame(applyCornerLens);
+      }
+    }
+
+    measureCenters();
+
+    if (!reduceMotion) {
+      document.addEventListener("mousemove", (event) => {
+        mouseX = event.clientX + window.scrollX;
+        mouseY = event.clientY + window.scrollY;
+        queueFrame();
+      });
+    } else {
+      logos.forEach((logo) => {
+        if (logo) logo.style.opacity = "1";
+      });
+      labels.forEach((label) => {
+        if (label) label.style.opacity = "1";
+      });
+    }
+
+    window.addEventListener("resize", () => {
+      measureCenters();
+    });
+
+    window.addEventListener("scroll", () => {
+      measureCenters();
+    }, { passive: true });
+  })();
+</script>

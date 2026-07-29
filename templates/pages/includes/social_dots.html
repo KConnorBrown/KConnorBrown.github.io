@@ -1,0 +1,63 @@
+{% load static %}
+<div class="corner-dots is-booting" id="corner-dots" aria-label="Site and social links">
+  <a
+    class="corner-dot corner-dot-home"
+    href="/"
+    aria-label="Home"
+  >
+    <span class="corner-disc">
+      <img src="{% static 'icons/home.svg' %}" alt="" class="corner-logo" width="28" height="28">
+    </span>
+  </a>
+  <a
+    class="corner-dot corner-dot-mail"
+    href="mailto:kenneth_brown@alumni.brown.edu"
+    aria-label="Email"
+  >
+    <span class="corner-disc">
+      <img src="{% static 'icons/mail.svg' %}" alt="" class="corner-logo" width="28" height="28">
+    </span>
+  </a>
+  <a
+    class="corner-dot corner-dot-github"
+    href="https://github.com/KConnorBrown"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="GitHub"
+  >
+    <span class="corner-disc">
+      <img src="{% static 'icons/github.svg' %}" alt="" class="corner-logo" width="28" height="28">
+    </span>
+  </a>
+  <a
+    class="corner-dot corner-dot-linkedin"
+    href="https://www.linkedin.com/in/k-connor-brown/"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="LinkedIn"
+  >
+    <span class="corner-disc">
+      <img src="{% static 'icons/linkedin.svg' %}" alt="" class="corner-logo" width="26" height="26">
+    </span>
+  </a>
+
+  {% if journal_filter_tags %}
+    <div class="corner-filter-rail" aria-label="Photo journal tag filters">
+      {% for tag in journal_filter_tags %}
+        <a
+          class="corner-dot corner-dot-filter{% if active_filter and active_filter.slug == tag.slug %} is-selected{% endif %}"
+          href="{% if active_filter and active_filter.slug == tag.slug %}{% url 'photo_journal' %}{% else %}{% url 'photo_journal' %}?tag={{ tag.slug }}{% endif %}"
+          aria-label="{% if active_filter and active_filter.slug == tag.slug %}Clear {{ tag.name }} filter{% else %}Filter by {{ tag.name }}{% endif %}"
+          data-filter-slug="{{ tag.slug }}"
+          data-filter-color="{{ tag.color }}"
+          data-filter-selected="{{ tag.selected }}"
+          style="--filter-color: {{ tag.color }}; --filter-selected: {{ tag.selected }};"
+        >
+          <span class="corner-disc">
+            <span class="corner-label{% if tag.slug == 'architecture' or tag.slug == 'san-francisco' %} is-long{% endif %}">{% if tag.slug == 'san-francisco' %}San<br>Francisco{% else %}{{ tag.name }}{% endif %}</span>
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>

@@ -1,10 +1,13 @@
 {% extends "pages/base.html" %}
 
-{% block content %}
-  <section class="section">
-    <h1>{{ title }}</h1>
-    <p class="section-intro">{{ intro }}</p>
+{% block body_class %}page-map{% endblock %}
 
+{% block content %}
+  <section class="section photo-stream-section is-map">
+    {% include "journal/includes/photo_dots.html" %}
+  </section>
+
+  <section class="section map-content">
     <div class="grid">
       {% for project in projects %}
         <a class="card" href="{% url 'project_detail' project.slug %}">
@@ -21,4 +24,8 @@
       {% endfor %}
     </div>
   </section>
+{% endblock %}
+
+{% block extra_js %}
+  {% include "journal/includes/dot_map_js.html" %}
 {% endblock %}

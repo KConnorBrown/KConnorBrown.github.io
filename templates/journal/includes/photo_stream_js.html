@@ -1,0 +1,192 @@
+<script>
+  (() => {
+    const stream = document.getElementById("photo-stream");
+    const modal = document.getElementById("photo-modal");
+    if (!stream || !modal) return;
+
+    const image = document.getElementById("photo-modal-image");
+    const dateEl = document.getElementById("photo-modal-date");
+    const captionEl = document.getElementById("photo-modal-caption");
+    const tagsEl = document.getElementById("photo-modal-tags");
+    const deleteBtn = document.getElementById("photo-modal-delete");
+    const unpublishBtn = document.getElementById("photo-modal-unpublish");
+    const csrfToken = "{{ csrf_token }}";
+    const canCurate = stream.dataset.canCurate === "1";
+    const filterTags = (stream.dataset.filterTags || "")
+      .split(",")
+      .map((slug) => slug.trim())
+      .filter(Boolean);
+    let activeItem = null;
+
+    function readTags(item) {
+      return Array.from(item.querySelectorAll(".photo-item-tags [data-slug]")).map((node) => ({
+        slug: node.dataset.slug,
+        name: node.dataset.name,
+      }));
+    }
+
+    function writeTags(item, tags) {
+      const holder = item.querySelector(".photo-item-tags");
+      if (!holder) return;
+      holder.innerHTML = "";
+      tags.forEach((tag) => {
+        const span = document.createElement("span");
+        span.dataset.slug = tag.slug;
+        span.dataset.name = tag.name;
+        holder.appendChild(span);
+      });
+    }
+
+    function renderModalTags(tags) {
+      if (!tagsEl) return;
+      tagsEl.innerHTML = "";
+      if (!tags.length) {
+        tagsEl.hidden = true;
+        return;
+      }
+      tagsEl.hidden = false;
+      tags.forEach((tag) => {
+        const chip = document.createElement("span");
+        chip.className = "photo-modal-tag";
+        chip.dataset.slug = tag.slug;
+
+        const label = document.createElement("span");
+        label.textContent = tag.name;
+        chip.appendChild(label);
+
+        if (canCurate) {
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "photo-modal-tag-remove";
+          removeBtn.dataset.removeTag = tag.slug;
+          removeBtn.setAttribute("aria-label", `Remove tag ${tag.name}`);
+          removeBtn.textContent = "×";
+          chip.appendChild(removeBtn);
+        }
+
+        tagsEl.appendChild(chip);
+      });
+    }
+
+    function openModal(item) {
+      activeItem = item;
+      image.src = item.dataset.src || "";
+      image.alt = item.getAttribute("aria-label") || "";
+      dateEl.textContent = item.dataset.date || "";
+      captionEl.textContent = item.dataset.caption || "";
+      renderModalTags(readTags(item));
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      document.body.classList.remove("modal-open");
+      image.removeAttribute("src");
+      activeItem = null;
+      if (tagsEl) {
+        tagsEl.innerHTML = "";
+        tagsEl.hidden = true;
+      }
+    }
+
+    function stillMatchesFilter(tags) {
+      if (!filterTags.length) return true;
+      const slugs = new Set(tags.map((tag) => tag.slug));
+      return filterTags.some((slug) => slugs.has(slug));
+    }
+
+    stream.addEventListener("click", (event) => {
+      const item = event.target.closest(".dot-photo");
+      if (!item) return;
+      openModal(item);
+    });
+
+    modal.addEventListener("click", (event) => {
+      if (event.target.closest("[data-close-modal]")) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.hidden) {
+        closeModal();
+      }
+    });
+
+    async function postAction(url) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+      if (!response.ok) {
+        throw new Error("Request failed");
+      }
+      return response.json();
+    }
+
+    if (tagsEl) {
+      tagsEl.addEventListener("click", async (event) => {
+        const removeBtn = event.target.closest("[data-remove-tag]");
+        if (!removeBtn || !activeItem || !canCurate) return;
+
+        const tagSlug = removeBtn.dataset.removeTag;
+        const template = activeItem.dataset.removeTagUrlTemplate || "";
+        const url = template.replace("TAG_SLUG", encodeURIComponent(tagSlug));
+        if (!url) return;
+
+        try {
+          const data = await postAction(url);
+          const tags = data.tags || [];
+          writeTags(activeItem, tags);
+          renderModalTags(tags);
+
+          if (!stillMatchesFilter(tags)) {
+            activeItem.remove();
+            closeModal();
+          }
+        } catch (error) {
+          window.alert("Could not remove tag. Are you logged in as staff?");
+        }
+      });
+    }
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async () => {
+        if (!activeItem) return;
+        if (!window.confirm("Delete this photo permanently? This cannot be undone.")) {
+          return;
+        }
+        try {
+          await postAction(activeItem.dataset.deleteUrl);
+          activeItem.remove();
+          closeModal();
+        } catch (error) {
+          window.alert("Could not delete photo. Are you logged in as staff?");
+        }
+      });
+    }
+
+    if (unpublishBtn) {
+      unpublishBtn.addEventListener("click", async () => {
+        if (!activeItem) return;
+        try {
+          await postAction(activeItem.dataset.unpublishUrl);
+          activeItem.dataset.published = "0";
+          if (!activeItem.querySelector(".photo-stream-badge")) {
+            const badge = document.createElement("span");
+            badge.className = "photo-stream-badge";
+            badge.textContent = "Hidden";
+            activeItem.appendChild(badge);
+          }
+          closeModal();
+        } catch (error) {
+          window.alert("Could not hide photo. Are you logged in as staff?");
+        }
+      });
+    }
+  })();
+</script>

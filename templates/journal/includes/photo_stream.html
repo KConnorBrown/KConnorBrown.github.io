@@ -1,0 +1,44 @@
+{% if entries %}
+  <div
+    class="photo-stream"
+    id="photo-stream"
+    data-can-curate="{% if can_curate %}1{% else %}0{% endif %}"
+    data-filter-tags="{% for slug in filter_tag_slugs %}{{ slug }}{% if not forloop.last %},{% endif %}{% endfor %}"
+  >
+    {% for entry in entries %}
+      <button
+        type="button"
+        class="photo-stream-item"
+        data-id="{{ entry.pk }}"
+        data-src="{% if entry.photo %}{{ entry.photo.url }}{% endif %}"
+        data-caption="{{ entry.caption|escape }}"
+        data-date="{{ entry.entry_date }}"
+        data-published="{% if entry.is_published %}1{% else %}0{% endif %}"
+        {% if can_curate %}
+          data-delete-url="{% url 'delete_journal_entry' entry.pk %}"
+          data-unpublish-url="{% url 'unpublish_journal_entry' entry.pk %}"
+          data-remove-tag-url-template="{% url 'remove_journal_entry_tag' entry.pk 'TAG_SLUG' %}"
+        {% endif %}
+        aria-label="Open photo from {{ entry.entry_date }}"
+      >
+        <span class="photo-item-tags" hidden>
+          {% for tag in entry.tags.all %}
+            <span data-slug="{{ tag.slug }}" data-name="{{ tag.name }}"></span>
+          {% endfor %}
+        </span>
+        {% if entry.photo %}
+          <img src="{{ entry.photo.url }}" alt="{{ entry.title }}" loading="lazy">
+        {% endif %}
+        {% if not entry.is_published %}
+          <span class="photo-stream-badge">Hidden</span>
+        {% endif %}
+      </button>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="placeholder">
+    <p>No photos in this view yet.</p>
+  </div>
+{% endif %}
+
+{% include "journal/includes/photo_modal.html" %}

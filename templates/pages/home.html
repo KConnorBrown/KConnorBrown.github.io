@@ -1,31 +1,39 @@
 {% extends "pages/base.html" %}
 
+{% block body_class %}page-map page-home home-intro-active{% endblock %}
+
 {% block content %}
-  <section class="hero">
-    <p class="hero-kicker">Personal website</p>
-    <h1>{{ title }}</h1>
-    <p class="hero-intro">{{ intro }}</p>
+  <section class="section photo-stream-section is-map home-stage" aria-label="Home">
+    <div
+      class="photo-stream dot-map home-welcome-map is-booting"
+      id="home-welcome"
+      data-nav-count="3"
+      aria-hidden="true"
+    >
+      <div class="photo-stream-item dot-item dot-welcome" aria-hidden="true">
+        <span class="dot-disc">
+          <span class="dot-label">Hi</span>
+        </span>
+      </div>
+      <div class="photo-stream-item dot-item dot-welcome" aria-hidden="true">
+        <span class="dot-disc">
+          <span class="dot-label">I&rsquo;m</span>
+        </span>
+      </div>
+      <div class="photo-stream-item dot-item dot-welcome" aria-hidden="true">
+        <span class="dot-disc">
+          <span class="dot-label is-long">Connor</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="home-menu-wrap" id="home-menu-wrap" aria-hidden="true">
+      {% include "journal/includes/photo_dots.html" %}
+    </div>
   </section>
-  <section class="grid">
-    <a class="card" href="/development/">
-      <h2>Development</h2>
-      <p>Projects, experiments, and the PostgreSQL SQL playground.</p>
-    </a>
-    <a class="card" href="/visual-art/">
-      <h2>Visual Art</h2>
-      <p>Chronological archive with an interactive viewer.</p>
-    </a>
-    <a class="card" href="/writing/">
-      <h2>Writing</h2>
-      <p>Essays, notes, and long-form drafts.</p>
-    </a>
-    <a class="card" href="/interior-design/">
-      <h2>Interior Design</h2>
-      <p>Spatial studies and journaled work.</p>
-    </a>
-    <a class="card" href="/photo-journal/">
-      <h2>Photo Journal</h2>
-      <p>Grid-based photo stream outside social platforms.</p>
-    </a>
-  </section>
+{% endblock %}
+
+{% block extra_js %}
+  {% include "journal/includes/dot_map_js.html" %}
+  {% include "pages/includes/home_intro_js.html" %}
 {% endblock %}

@@ -1,0 +1,134 @@
+<script>
+  (() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const map = document.getElementById("photo-stream");
+    const corners = document.getElementById("corner-dots");
+
+    function fallables() {
+      const mapItems = map
+        ? Array.from(map.querySelectorAll(".dot-item:not(.is-filter-hidden)"))
+        : [];
+      const cornerItems = corners ? Array.from(corners.querySelectorAll(".corner-dot")) : [];
+      return { mapItems, cornerItems, all: mapItems.concat(cornerItems) };
+    }
+
+    function assignFallIndex(nodes) {
+      // Cap stagger length so large photo grids don't take forever.
+      nodes.forEach((node, i) => {
+        node.style.setProperty("--fall-i", String(Math.min(i, 42)));
+      });
+    }
+
+    function maxLeaveMs(count) {
+      const steps = Math.min(Math.max(count, 1), 42);
+      return steps * 22 + 580;
+    }
+
+    function playEnter() {
+      // Homepage owns its staged intro (welcome → menu).
+      if (document.body.classList.contains("page-home")) {
+        if (corners && !document.body.classList.contains("home-intro-active")) {
+          corners.classList.remove("is-booting", "is-entering", "is-leaving");
+          corners.classList.add("is-settled");
+        }
+        return;
+      }
+
+      const { mapItems, cornerItems } = fallables();
+      assignFallIndex(mapItems);
+      assignFallIndex(cornerItems);
+
+      if (reduceMotion) {
+        if (map) {
+          map.classList.remove("is-booting", "is-entering", "is-leaving");
+          map.classList.add("is-settled");
+        }
+        if (corners) {
+          corners.classList.remove("is-booting", "is-entering", "is-leaving");
+          corners.classList.add("is-settled");
+        }
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        if (map) {
+          map.classList.remove("is-booting");
+          map.classList.add("is-entering");
+        }
+        if (corners) {
+          corners.classList.remove("is-booting");
+          corners.classList.add("is-entering");
+        }
+
+        window.setTimeout(() => {
+          if (map) {
+            map.classList.remove("is-entering");
+            map.classList.add("is-settled");
+          }
+          if (corners) {
+            corners.classList.remove("is-entering");
+            corners.classList.add("is-settled");
+          }
+        }, maxLeaveMs(mapItems.length + cornerItems.length) + 200);
+      });
+    }
+
+    function playLeave() {
+      return new Promise((resolve) => {
+        if (reduceMotion) {
+          resolve();
+          return;
+        }
+        const { mapItems, cornerItems, all } = fallables();
+        assignFallIndex(all);
+        if (map) {
+          map.classList.remove("is-entering", "is-settled");
+          map.classList.add("is-leaving");
+        }
+        if (corners) {
+          corners.classList.remove("is-entering", "is-settled");
+          corners.classList.add("is-leaving");
+        }
+        document.body.classList.add("is-page-leaving");
+        window.setTimeout(resolve, maxLeaveMs(all.length));
+      });
+    }
+
+    function isInternalNav(anchor) {
+      if (!anchor || anchor.target === "_blank") return false;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) {
+        return false;
+      }
+      let url;
+      try {
+        url = new URL(anchor.href, window.location.href);
+      } catch (error) {
+        return false;
+      }
+      if (url.origin !== window.location.origin) return false;
+      if (url.href === window.location.href) return false;
+      return true;
+    }
+
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        const anchor = event.target.closest("a[href]");
+        if (!isInternalNav(anchor)) return;
+        // Tag-filter dots use the paint-spill transition instead.
+        if (anchor.classList.contains("corner-dot-filter")) return;
+        event.preventDefault();
+        playLeave().then(() => {
+          window.location.href = anchor.href;
+        });
+      },
+      true
+    );
+
+    playEnter();
+  })();
+</script>

@@ -8,6 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "change-me-in-production")
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
+# Admin batch actions on ~700 journal rows need headroom above Django's default of 1000.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
 _default_hosts = ["127.0.0.1", "localhost"]
 if os.getenv("VERCEL"):
     _default_hosts.extend([".vercel.app", "connorbrown.net", "www.connorbrown.net"])

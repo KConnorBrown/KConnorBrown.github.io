@@ -1,0 +1,98 @@
+{% load static %}
+<div
+  class="photo-stream dot-map is-booting"
+  id="photo-stream"
+  data-can-curate="{% if can_curate %}1{% else %}0{% endif %}"
+  data-filter-tags="{% for slug in filter_tag_slugs %}{{ slug }}{% if not forloop.last %},{% endif %}{% endfor %}"
+  data-nav-count="{{ nav_sections|length }}"
+>
+  {% for section in nav_sections %}
+    {% if active_section_key == section.key %}
+      <button
+        type="button"
+        class="photo-stream-item dot-item dot-page"
+        id="page-indicator"
+        data-page-title="{{ title }}"
+        data-page-intro="{{ intro }}"
+        aria-label="About {{ section.label }}"
+      >
+        <span class="dot-disc">
+          <span class="dot-label{% if section.label_lines|length > 1 or section.label|length > 8 %} is-long{% endif %}">{% for line in section.label_lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</span>
+        </span>
+      </button>
+    {% else %}
+      <a
+        class="photo-stream-item dot-item dot-nav"
+        href="{{ section.url }}"
+        aria-label="{{ section.label }}"
+      >
+        <span class="dot-disc">
+          <span class="dot-label{% if section.label_lines|length > 1 or section.label|length > 8 %} is-long{% endif %}">{% for line in section.label_lines %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</span>
+        </span>
+      </a>
+    {% endif %}
+  {% endfor %}
+
+  {% for entry in entries %}
+    <button
+      type="button"
+      class="photo-stream-item dot-item dot-photo{% if entry.filter_hidden %} is-filter-hidden{% endif %}"
+      data-id="{{ entry.pk }}"
+      data-tags="{{ entry.data_tags }}"
+      data-src="{% if entry.photo %}{{ entry.photo.url }}{% endif %}"
+      data-caption="{{ entry.caption|escape }}"
+      data-date="{{ entry.entry_date }}"
+      data-published="{% if entry.is_published %}1{% else %}0{% endif %}"
+      {% if can_curate %}
+        data-delete-url="{% url 'delete_journal_entry' entry.pk %}"
+        data-unpublish-url="{% url 'unpublish_journal_entry' entry.pk %}"
+        data-remove-tag-url-template="{% url 'remove_journal_entry_tag' entry.pk 'TAG_SLUG' %}"
+      {% endif %}
+      aria-label="Open photo from {{ entry.entry_date }}"
+    >
+      <span class="photo-item-tags" hidden>
+        {% for tag in entry.tags.all %}
+          <span data-slug="{{ tag.slug }}" data-name="{{ tag.name }}"></span>
+        {% endfor %}
+      </span>
+      <span class="dot-disc">
+        {% if entry.photo %}
+          <img src="{{ entry.photo.url }}" alt="{{ entry.title }}" loading="lazy">
+        {% endif %}
+      </span>
+    </button>
+  {% empty %}
+  {% endfor %}
+</div>
+
+{% include "journal/includes/photo_modal.html" %}
+
+<div class="page-info-modal" id="page-info-modal" hidden>
+  <div class="page-info-modal-backdrop" data-close-page-info></div>
+  <div
+    class="page-info-modal-dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="page-info-title"
+  >
+    <button type="button" class="page-info-modal-close" data-close-page-info aria-label="Close">×</button>
+    <h2 id="page-info-title">{{ title }}</h2>
+    <p id="page-info-intro">{{ intro }}</p>
+    {% if tags %}
+      <nav class="page-info-tags" aria-label="Photo tags">
+        <a class="page-info-tag{% if not active_tag %} is-active{% endif %}" href="{% url 'photo_journal' %}">All</a>
+        {% for tag in tags %}
+          <a
+            class="page-info-tag{% if active_tag and active_tag.slug == tag.slug %} is-active{% endif %}"
+            href="{% url 'photo_journal' %}?tag={{ tag.slug }}"
+          >{{ tag.name }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+    {% if can_curate and active_section_key == "photo-journal" %}
+      <p class="page-info-tools">
+        <a href="{% url 'curate_photo_journal' %}">Bulk curate</a>
+      </p>
+    {% endif %}
+  </div>
+</div>
