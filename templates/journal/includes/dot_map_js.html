@@ -9,7 +9,6 @@
     let labels = [];
     let gridMeta = [];
 
-    const pageBtn = document.getElementById("page-indicator");
     const pageModal = document.getElementById("page-info-modal");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const motion = window.MapMotion || null;
@@ -46,13 +45,10 @@
     refreshItems();
     if (!items.length) return;
 
-    // Smooth fisheye warp with no lens boundary. Space is remapped radially:
-    //   R(r) = r * (1 + B * g),  g = exp(-r^2 / (2 * sigma^2))
     const BULGE = 1.4;
     const SIGMA_CELLS = 2.0;
     const MIN_SCALE = 0.32;
     const MAX_CELL = 150;
-    // Touch: match ~corner disc face (44px at 72% of cell ≈ 61px cell).
     const TOUCH_TARGET_CELL = 68;
 
     let cellSize = 0;
@@ -60,8 +56,9 @@
     let mouseX = null;
     let mouseY = null;
     let frameQueued = false;
-    let shimmerRaf = 0;
-    let shimmerT0 = 0;
+    let shimmerObserver = null;
+    let scrollPauseTimer = null;
+    let scrolling = false;
 
     function layoutColumns() {
       const section = map.closest(".photo-stream-section");
@@ -73,14 +70,12 @@
       if (!available) return;
       const navCount = Math.max(1, parseInt(map.dataset.navCount || "8", 10));
       const touch = isTouchMode();
-      // Touch reclaim width; journal filters live in the grid on mobile, not the rail.
       const leftGutter = touch ? 52 : 48;
       const rightGutter = touch ? 52 : 48;
       const usable = Math.max(available - leftGutter - rightGutter, 160);
 
       let cols = navCount;
       if (touch) {
-        // Prefer 4 cols so a 7-item nav wraps to two rows at readable size.
         if (usable / 4 >= TOUCH_TARGET_CELL * 0.85) {
           cols = 4;
         } else if (usable / 3 >= TOUCH_TARGET_CELL * 0.75) {
@@ -118,33 +113,38 @@
     }
 
     function clearInlineReveal() {
-      items.forEach((item, i) => {
+      items.forEach((_item, i) => {
         if (images[i]) images[i].style.opacity = "";
         if (labels[i]) labels[i].style.opacity = "";
       });
     }
 
+    function applyMapGravity() {
+      if (!isTouchMode() || reduceMotion) {
+        map.style.transform = "";
+        return;
+      }
+      const g = gravityOffset();
+      if (g.x || g.y) {
+        map.style.transform = `translate3d(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px, 0)`;
+      } else {
+        map.style.transform = "";
+      }
+    }
+
     function resetAll() {
       map.classList.add("is-resting");
-      const g = gravityOffset();
-      const useGravity = isTouchMode() && !reduceMotion && (g.x || g.y);
       items.forEach((item, i) => {
         const disc = discs[i];
         if (!disc) return;
-        if (useGravity) {
-          disc.style.transform = `translate(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px)`;
-        } else {
-          disc.style.transform = "";
-        }
+        disc.style.transform = "";
         item.style.zIndex = "";
         if (!isTouchMode()) {
           if (images[i]) images[i].style.opacity = "";
           if (labels[i]) labels[i].style.opacity = "";
         }
       });
-      if (isTouchMode()) {
-        // Leave shimmer to own its opacity; clear only when shimmer stopped.
-      }
+      if (isTouchMode()) applyMapGravity();
     }
 
     function contentReveal(dist) {
@@ -162,7 +162,7 @@
     function applyLens() {
       frameQueued = false;
       if (isTouchMode()) {
-        applyTouchTransforms();
+        applyMapGravity();
         return;
       }
       if (mouseX === null) return;
@@ -203,26 +203,6 @@
       }
     }
 
-    function applyTouchTransforms(waveOpacity) {
-      const g = gravityOffset();
-      for (let i = 0; i < items.length; i += 1) {
-        const disc = discs[i];
-        if (!disc) continue;
-        disc.style.transform = `translate(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px)`;
-        items[i].style.zIndex = "";
-        if (waveOpacity && !lensSuppressed()) {
-          const meta = gridMeta[i] || { col: 0, row: 0, isNav: false };
-          const wave = waveOpacity(meta.col, meta.row, meta.isNav);
-          if (images[i] && items[i].classList.contains("dot-photo")) {
-            images[i].style.opacity = wave.toFixed(3);
-          }
-          if (labels[i] && meta.isNav) {
-            labels[i].style.opacity = Math.min(1, wave + 0.12).toFixed(3);
-          }
-        }
-      }
-    }
-
     function queueFrame() {
       if (!frameQueued) {
         frameQueued = true;
@@ -230,50 +210,77 @@
       }
     }
 
-    function shimmerAllowed() {
-      return (
-        isTouchMode() &&
-        !reduceMotion &&
-        !document.hidden &&
-        !lensSuppressed()
-      );
+    function assignShimmerIndex() {
+      let photoIndex = 0;
+      items.forEach((item) => {
+        if (
+          item.classList.contains("dot-photo") ||
+          item.classList.contains("dot-filter") ||
+          item.classList.contains("dot-nav") ||
+          item.classList.contains("dot-page")
+        ) {
+          item.style.setProperty("--shimmer-i", String(photoIndex % 24));
+          photoIndex += 1;
+        }
+      });
     }
 
-    function shimmerFrame(now) {
-      shimmerRaf = 0;
-      if (!shimmerAllowed()) {
-        if (isTouchMode()) {
-          clearInlineReveal();
-          applyTouchTransforms();
-        }
+    function setScrolling(active) {
+      if (scrolling === active) return;
+      scrolling = active;
+      document.body.classList.toggle("map-scrolling", active);
+    }
+
+    function onScroll() {
+      if (!isTouchMode()) return;
+      setScrolling(true);
+      window.clearTimeout(scrollPauseTimer);
+      scrollPauseTimer = window.setTimeout(() => setScrolling(false), 160);
+    }
+
+    function setupShimmerObserver() {
+      if (shimmerObserver) {
+        shimmerObserver.disconnect();
+        shimmerObserver = null;
+      }
+      if (!isTouchMode() || reduceMotion || typeof IntersectionObserver === "undefined") {
         return;
       }
-      if (!shimmerT0) shimmerT0 = now;
-      const t = (now - shimmerT0) / 1000;
-      applyTouchTransforms((col, row, isNav) => {
-        const phase = t * 1.35 + col * 0.55 + row * 0.38;
-        const wave = 0.5 + 0.5 * Math.sin(phase);
-        if (isNav) {
-          return 0.72 + wave * 0.22;
+      assignShimmerIndex();
+      shimmerObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            entry.target.classList.toggle("is-shimmering", entry.isIntersecting);
+          });
+        },
+        { root: null, rootMargin: "48px 0px", threshold: 0.02 }
+      );
+      items.forEach((item) => {
+        if (
+          item.classList.contains("dot-photo") ||
+          item.classList.contains("dot-nav") ||
+          item.classList.contains("dot-page") ||
+          item.classList.contains("dot-filter")
+        ) {
+          shimmerObserver.observe(item);
         }
-        return 0.55 + wave * 0.45;
       });
-      shimmerRaf = window.requestAnimationFrame(shimmerFrame);
     }
 
     function startShimmer() {
-      if (reduceMotion || shimmerRaf) return;
-      shimmerT0 = 0;
-      shimmerRaf = window.requestAnimationFrame(shimmerFrame);
+      if (reduceMotion || !isTouchMode()) return;
+      document.body.classList.add("map-shimmer");
+      setupShimmerObserver();
     }
 
     function stopShimmer() {
-      if (shimmerRaf) {
-        window.cancelAnimationFrame(shimmerRaf);
-        shimmerRaf = 0;
+      document.body.classList.remove("map-shimmer");
+      if (shimmerObserver) {
+        shimmerObserver.disconnect();
+        shimmerObserver = null;
       }
-      shimmerT0 = 0;
-      if (isTouchMode()) clearInlineReveal();
+      items.forEach((item) => item.classList.remove("is-shimmering"));
+      clearInlineReveal();
     }
 
     function openPageInfo() {
@@ -374,7 +381,7 @@
         layoutColumns();
         measureCenters();
         if (isTouchMode()) {
-          applyTouchTransforms();
+          applyMapGravity();
           startShimmer();
         } else {
           resetAll();
@@ -388,7 +395,7 @@
       window.requestAnimationFrame(() => {
         measureCenters();
         if (isTouchMode()) {
-          applyTouchTransforms();
+          applyMapGravity();
           startShimmer();
         } else {
           resetAll();
@@ -397,24 +404,21 @@
     });
 
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        stopShimmer();
-      } else if (isTouchMode()) {
-        startShimmer();
-      }
+      if (document.hidden) stopShimmer();
+      else if (isTouchMode()) startShimmer();
     });
+
+    window.addEventListener("scroll", onScroll, { passive: true });
 
     if (motion) {
       motion.subscribe(() => {
         if (!isTouchMode()) return;
-        if (!shimmerRaf) applyTouchTransforms();
+        applyMapGravity();
       });
     }
 
     if (isTouchMode() && !reduceMotion) {
-      if (!document.body.classList.contains("home-intro-active")) {
-        startShimmer();
-      }
+      if (!document.body.classList.contains("home-intro-active")) startShimmer();
     } else if (reduceMotion && isTouchMode()) {
       clearInlineReveal();
     }

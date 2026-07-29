@@ -66,13 +66,14 @@
 
     function applyGravityOnly() {
       const g = gravityOffset();
+      // One transform on the fixed chrome layer — not per-disc (keeps scroll smooth).
+      if (!reduceMotion && (g.x || g.y)) {
+        root.style.transform = `translate3d(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px, 0)`;
+      } else {
+        root.style.transform = "";
+      }
       discs.forEach((disc) => {
-        if (!disc) return;
-        if (g.x || g.y) {
-          disc.style.transform = `translate(${g.x.toFixed(2)}px, ${g.y.toFixed(2)}px)`;
-        } else {
-          disc.style.transform = "";
-        }
+        if (disc) disc.style.transform = "";
       });
       showTouchChrome();
       setCornerActive(false);

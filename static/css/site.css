@@ -643,6 +643,39 @@ body.map-touch .dot-page .dot-label.is-long {
   max-width: calc(var(--dot-cell, 120px) * 0.64);
 }
 
+/* Mobile shimmer: CSS-only, in-view dots only; paused while scrolling */
+@keyframes map-dot-shimmer {
+  0%,
+  100% {
+    opacity: 0.68;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+body.map-touch.map-shimmer .dot-map .dot-photo.is-shimmering img,
+body.map-touch.map-shimmer .dot-map .dot-nav.is-shimmering .dot-label,
+body.map-touch.map-shimmer .dot-map .dot-page.is-shimmering .dot-label,
+body.map-touch.map-shimmer .dot-map .dot-filter.is-shimmering .corner-label {
+  animation: map-dot-shimmer 3.4s ease-in-out infinite;
+  animation-delay: calc(var(--shimmer-i, 0) * -0.14s);
+}
+
+body.map-touch.map-scrolling.map-shimmer .dot-map .is-shimmering img,
+body.map-touch.map-scrolling.map-shimmer .dot-map .is-shimmering .dot-label,
+body.map-touch.map-scrolling.map-shimmer .dot-map .is-shimmering .corner-label {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.map-touch.map-shimmer .dot-map .is-shimmering img,
+  body.map-touch.map-shimmer .dot-map .is-shimmering .dot-label,
+  body.map-touch.map-shimmer .dot-map .is-shimmering .corner-label {
+    animation: none !important;
+  }
+}
+
 .map-tilt-enable {
   position: fixed;
   left: 50%;
